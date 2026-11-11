@@ -292,3 +292,11 @@ export function useSaveSettings() {
     },
   });
 }
+
+export function useRegenerateAccessCode() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<SchoolSettingsDto>("/api/admin/settings/access-code", { method: "POST" }),
+    onSuccess: (settings) => queryClient.setQueryData(queryKeys.adminSettings, settings),
+  });
+}

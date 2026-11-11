@@ -31,7 +31,7 @@ function AuthorizeUserForm({ onDone }: { onDone: (message: string) => void }) {
 
   return (
     <form className="card form" onSubmit={handleSubmit} noValidate>
-      <h2>Autorizar acesso da coordenação</h2>
+      <h2>Autorizar acesso do TI</h2>
       <p className="muted small-text">Professores não precisam de conta: eles reservam pelo link público da agenda.</p>
       <div className="form-grid">
         <label className="field">

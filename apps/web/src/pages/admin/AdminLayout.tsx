@@ -1,12 +1,22 @@
+import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router";
+import { useAdminSettings } from "../../api/hooks";
+import { rememberAccessCode } from "../../lib/access-code";
 
 export function AdminLayout() {
+  const settings = useAdminSettings();
+  const accessCode = settings.data?.publicAccessCode;
+
+  useEffect(() => {
+    if (accessCode) rememberAccessCode(accessCode);
+  }, [accessCode]);
+
   return (
     <section className="page">
       <header className="page-header">
-        <h1>Coordenação</h1>
+        <h1>Administração do TI</h1>
       </header>
-      <nav className="tabs" aria-label="Coordenação">
+      <nav className="tabs" aria-label="Administração do TI">
         <NavLink to="/admin/reservas">Reservas</NavLink>
         <NavLink to="/admin/bloqueios">Bloqueios e feriados</NavLink>
         <NavLink to="/admin/configuracoes">Configurações</NavLink>

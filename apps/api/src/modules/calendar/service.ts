@@ -10,7 +10,7 @@ import {
   type CalendarDto,
 } from "@chromebook/shared";
 import type { AppContainer } from "@/lib/container";
-import { getSchoolHours, listClassPeriods } from "@/modules/settings/repository";
+import { getSchoolHours, listClassSchedules } from "@/modules/settings/repository";
 import { listBlocksInRange, toCalendarBlockDto } from "@/modules/blocks/repository";
 import { listCarts } from "@/modules/carts/service";
 import { listConfirmedReservations } from "@/modules/reservations/repository";
@@ -22,9 +22,9 @@ export async function getCalendar(
   query: { from: string; to: string; cartId?: string },
 ): Promise<CalendarDto> {
   const now = schoolNow(container.clock.now());
-  const [hours, periods, carts, reservations, blocks] = await Promise.all([
+  const [hours, schedules, carts, reservations, blocks] = await Promise.all([
     getSchoolHours(container.db),
-    listClassPeriods(container.db),
+    listClassSchedules(container.db),
     listCarts(container, { onlyActive: true }),
     listConfirmedReservations(container.db, query),
     listBlocksInRange(container.db, query),
@@ -33,7 +33,7 @@ export async function getCalendar(
     today: now.date,
     nowTime: now.time,
     hours,
-    periods,
+    schedules,
     carts,
     reservations: reservations.map((view) => toReservationDto(view, audience, now)),
     blocks: blocks.map(toCalendarBlockDto),

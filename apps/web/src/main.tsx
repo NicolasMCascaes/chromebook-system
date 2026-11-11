@@ -6,9 +6,11 @@ import { ApiError } from "./api/client";
 import { AuthProvider } from "./auth/AuthProvider";
 import { App } from "./App";
 import { applyTheme } from "./lib/theme";
+import { captureAccessCodeFromUrl } from "./lib/access-code";
 import "./styles.css";
 
 applyTheme();
+captureAccessCodeFromUrl();
 
 const queryClient = new QueryClient({
   defaultOptions: {

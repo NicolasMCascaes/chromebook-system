@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { CalendarBlockDto, ClassPeriodDto, ReservationDto, SchoolHoursDto, SchoolNow } from "@chromebook/shared";
+import type { CalendarBlockDto, ClassPeriodDto, ClassScheduleDto, ReservationDto, SchoolHoursDto, SchoolNow } from "@chromebook/shared";
 import {
   computeDayStatus,
   describePeriodRange,
+  describeWithSchedules,
+  findMatchingSchedule,
   matchPeriods,
   nearestSchoolDay,
   nextSchoolDay,
@@ -117,6 +119,33 @@ describe("seleção por aula", () => {
     expect(describePeriodRange(PERIODS, "10:10", "11:00")).toBe("4ª aula");
     expect(describePeriodRange(PERIODS, "07:20", "11:50")).toBe("1ª aula até 5ª aula");
     expect(describePeriodRange(PERIODS, "07:25", "08:10")).toBeNull();
+  });
+});
+
+describe("grades de horário", () => {
+  const SIXTH: ClassScheduleDto = {
+    id: "s1",
+    name: "6º A, 6º B e 7º ano",
+    periods: [
+      { id: "a1", name: "1ª aula", startTime: "07:20", endTime: "08:10" },
+      { id: "a2", name: "2ª aula", startTime: "08:10", endTime: "09:00" },
+      { id: "a3", name: "3ª aula", startTime: "09:20", endTime: "10:10" },
+      { id: "a4", name: "4ª aula", startTime: "10:10", endTime: "11:00" },
+    ],
+  };
+  const OTHERS: ClassScheduleDto = { id: "s2", name: "Demais turmas", periods: PERIODS };
+
+  it("descreve o horário pela grade que o contém", () => {
+    expect(describeWithSchedules([SIXTH, OTHERS], "09:20", "10:10")).toBe("3ª aula, 6º A, 6º B e 7º ano");
+    expect(describeWithSchedules([SIXTH, OTHERS], "09:00", "09:50")).toBe("3ª aula, Demais turmas");
+    expect(describeWithSchedules([SIXTH, OTHERS], "07:20", "09:00")).toBe("1ª aula até 2ª aula");
+    expect(describeWithSchedules([SIXTH, OTHERS], "07:25", "09:00")).toBeNull();
+  });
+
+  it("encontra a grade de um horário já escolhido", () => {
+    expect(findMatchingSchedule([SIXTH, OTHERS], "10:10", "11:00")?.schedule.id).toBe("s1");
+    expect(findMatchingSchedule([SIXTH, OTHERS], "09:00", "09:50")?.schedule.id).toBe("s2");
+    expect(findMatchingSchedule([SIXTH, OTHERS], "09:05", "09:50")).toBeNull();
   });
 });
 

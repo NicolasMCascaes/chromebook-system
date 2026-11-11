@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useCalendarController } from "@fullcalendar/react";
 import { schoolNow } from "@chromebook/shared";
 import { useCalendar, type DateRange } from "../api/hooks";
-import { errorMessage } from "../api/client";
+import { errorMessage, isAccessDenied } from "../api/client";
 import { StatusMessage } from "../components/StatusMessage";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import { formatWeekday } from "../lib/format";
@@ -43,6 +43,20 @@ export function AgendaPage() {
     </button>
   );
 
+  if (isAccessDenied(calendar.error)) {
+    return (
+      <section className="page agenda-page">
+        <div className="card access-denied">
+          <h1>Agenda de Chromebooks</h1>
+          <p>Para ver a agenda e reservar um carrinho, abra o link enviado pelo TI da escola.</p>
+          <p className="muted small-text">
+            Se você já usou o link e esta mensagem apareceu, ele foi substituído. Peça o link atualizado ao TI.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="page agenda-page">
       <header className="page-header agenda-header">
@@ -50,7 +64,7 @@ export function AgendaPage() {
         {scheduleButton}
       </header>
 
-      {calendar.isError && <StatusMessage kind="error">{errorMessage(calendar.error)}</StatusMessage>}
+      {calendar.isError && !isAccessDenied(calendar.error) && <StatusMessage kind="error">{errorMessage(calendar.error)}</StatusMessage>}
 
       {isMobile ? (
         <div className="agenda-mobile">
@@ -146,7 +160,7 @@ export function AgendaPage() {
       )}
       <ReservationDetailsDialog
         reservationId={openReservationId}
-        periods={data?.periods ?? []}
+        schedules={data?.schedules ?? []}
         onClose={() => setOpenReservationId(null)}
       />
     </section>

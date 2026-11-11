@@ -48,7 +48,7 @@ export function LoginPage() {
   return (
     <main className="full-page">
       <section className="card login-card">
-        <h1>Área da coordenação</h1>
+        <h1>Área do TI</h1>
         <p className="muted">Informe seu e-mail institucional para receber um link de acesso.</p>
 
         {env.devAuth ? (

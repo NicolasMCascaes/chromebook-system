@@ -1,20 +1,20 @@
 import { useState } from "react";
-import type { ClassPeriodDto } from "@chromebook/shared";
+import type { ClassScheduleDto } from "@chromebook/shared";
 import { useCancelReservation, useReservation } from "../../api/hooks";
 import { errorMessage } from "../../api/client";
 import { Modal } from "../../components/Modal";
 import { StatusMessage } from "../../components/StatusMessage";
-import { describePeriodRange } from "./schedule-model";
+import { describeWithSchedules } from "./schedule-model";
 import { cancelTokenFor } from "../../lib/my-reservations";
 import { ReservationSummary } from "./ReservationDialog";
 
 interface ReservationDetailsDialogProps {
   reservationId: string | null;
-  periods: ClassPeriodDto[];
+  schedules: ClassScheduleDto[];
   onClose: () => void;
 }
 
-function ReservationDetails({ reservationId, periods, onClose }: { reservationId: string; periods: ClassPeriodDto[]; onClose: () => void }) {
+function ReservationDetails({ reservationId, schedules, onClose }: { reservationId: string; schedules: ClassScheduleDto[]; onClose: () => void }) {
   const cancelToken = cancelTokenFor(reservationId);
   const reservation = useReservation(reservationId, cancelToken);
   const cancel = useCancelReservation();
@@ -40,14 +40,14 @@ function ReservationDetails({ reservationId, periods, onClose }: { reservationId
         cartName={data.cartName}
         cartColor={data.cartColor}
         notes={data.notes}
-        periodsLabel={describePeriodRange(periods, data.startTime, data.endTime)}
+        periodsLabel={describeWithSchedules(schedules, data.startTime, data.endTime)}
       />
 
       {cancel.isError && <StatusMessage kind="error">{errorMessage(cancel.error)}</StatusMessage>}
 
       {!cancelled && data.canCancel && !cancelToken && (
         <p className="muted small-text">
-          Esta reserva foi feita em outro navegador. Para cancelá-la, fale com a coordenação.
+          Esta reserva foi feita em outro navegador. Para cancelá-la, fale com o TI.
         </p>
       )}
 
@@ -92,10 +92,10 @@ function ReservationDetails({ reservationId, periods, onClose }: { reservationId
   );
 }
 
-export function ReservationDetailsDialog({ reservationId, periods, onClose }: ReservationDetailsDialogProps) {
+export function ReservationDetailsDialog({ reservationId, schedules, onClose }: ReservationDetailsDialogProps) {
   return (
     <Modal open={reservationId !== null} title="Reserva" onClose={onClose}>
-      {reservationId && <ReservationDetails reservationId={reservationId} periods={periods} onClose={onClose} />}
+      {reservationId && <ReservationDetails reservationId={reservationId} schedules={schedules} onClose={onClose} />}
     </Modal>
   );
 }

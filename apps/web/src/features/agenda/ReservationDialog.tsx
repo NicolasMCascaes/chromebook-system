@@ -14,7 +14,7 @@ import { StatusMessage } from "../../components/StatusMessage";
 import { formatDateLong, formatTimeRange, plural } from "../../lib/format";
 import { zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
 import { lastTeacherName, newCancelToken, rememberReservation, rememberTeacherName } from "../../lib/my-reservations";
-import { describePeriodRange, matchPeriods, overlapsReservation, periodRangeTimes } from "./schedule-model";
+import { describeWithSchedules, findMatchingSchedule, overlapsReservation, periodRangeTimes } from "./schedule-model";
 import { cartStyle } from "./cart-style";
 
 export interface ReservationPrefill {
@@ -31,6 +31,7 @@ interface FormValues {
   className: string;
   date: string;
   mode: TimeMode;
+  scheduleId: string;
   fromPeriodId: string;
   toPeriodId: string;
   startTime: string;
@@ -48,20 +49,23 @@ interface ReservationDialogProps {
   open: boolean;
   onClose: () => void;
   prefill: ReservationPrefill;
-  schedule: Pick<CalendarDto, "periods" | "carts" | "hours" | "today">;
+  schedule: Pick<CalendarDto, "schedules" | "carts" | "hours" | "today">;
 }
 
 function initialValues(prefill: ReservationPrefill, schedule: ReservationDialogProps["schedule"]): FormValues {
-  const periods = schedule.periods;
-  const matched = prefill.startTime && prefill.endTime ? matchPeriods(periods, prefill.startTime, prefill.endTime) : null;
-  const usePeriods = periods.length > 0 && (matched !== null || !prefill.startTime);
+  const schedules = schedule.schedules.filter((entry) => entry.periods.length > 0);
+  const matched =
+    prefill.startTime && prefill.endTime ? findMatchingSchedule(schedules, prefill.startTime, prefill.endTime) : null;
+  const usePeriods = schedules.length > 0 && (matched !== null || !prefill.startTime);
+  const periods = (matched?.schedule ?? schedules[0])?.periods ?? [];
   return {
     teacherName: lastTeacherName(),
     className: "",
     date: prefill.date ?? schedule.today,
     mode: usePeriods ? "period" : "custom",
-    fromPeriodId: matched?.fromPeriodId ?? periods[0]?.id ?? "",
-    toPeriodId: matched?.toPeriodId ?? periods[0]?.id ?? "",
+    scheduleId: matched?.schedule.id ?? schedules[0]?.id ?? "",
+    fromPeriodId: matched?.selection.fromPeriodId ?? periods[0]?.id ?? "",
+    toPeriodId: matched?.selection.toPeriodId ?? periods[0]?.id ?? "",
     startTime: prefill.startTime ?? schedule.hours.openingTime,
     endTime: prefill.endTime ?? "",
     cartId: prefill.cartId ?? (schedule.carts.length === 1 ? schedule.carts[0]!.id : ""),
@@ -86,12 +90,20 @@ function ReservationForm({
   const set = <K extends keyof FormValues>(key: K, value: FormValues[K]) =>
     setValues((current) => ({ ...current, [key]: value }));
 
+  const schedules = schedule.schedules.filter((entry) => entry.periods.length > 0);
+  const periods = schedules.find((entry) => entry.id === values.scheduleId)?.periods ?? [];
+
+  function selectSchedule(scheduleId: string) {
+    const firstPeriod = schedules.find((entry) => entry.id === scheduleId)?.periods[0]?.id ?? "";
+    setValues((current) => ({ ...current, scheduleId, fromPeriodId: firstPeriod, toPeriodId: firstPeriod }));
+  }
+
   const selectedTimes = useMemo(() => {
     if (values.mode === "period") {
-      return periodRangeTimes(schedule.periods, { fromPeriodId: values.fromPeriodId, toPeriodId: values.toPeriodId });
+      return periodRangeTimes(periods, { fromPeriodId: values.fromPeriodId, toPeriodId: values.toPeriodId });
     }
     return values.startTime && values.endTime ? { startTime: values.startTime, endTime: values.endTime } : null;
-  }, [values.mode, values.fromPeriodId, values.toPeriodId, values.startTime, values.endTime, schedule.periods]);
+  }, [values.mode, values.fromPeriodId, values.toPeriodId, values.startTime, values.endTime, periods]);
 
   function cartAvailabilityText(cartId: string): { text: string; busy: boolean } | null {
     const cart = dayAvailability?.carts.find((entry) => entry.cartId === cartId);
@@ -156,7 +168,7 @@ function ReservationForm({
         <StatusMessage kind="success">Reserva confirmada.</StatusMessage>
         <p className="muted small-text">
           Se precisar cancelar, abra a reserva na agenda usando este mesmo navegador. Em outro aparelho, peça o
-          cancelamento à coordenação.
+          cancelamento ao TI.
         </p>
         <ReservationSummary
           teacherName={reservation.teacherName}
@@ -167,7 +179,7 @@ function ReservationForm({
           cartName={reservation.cartName}
           cartColor={reservation.cartColor}
           notes={reservation.notes}
-          periodsLabel={describePeriodRange(schedule.periods, reservation.startTime, reservation.endTime)}
+          periodsLabel={describeWithSchedules(schedule.schedules, reservation.startTime, reservation.endTime)}
         />
         <div className="actions">
           <button type="button" className="button primary" onClick={onClose}>
@@ -192,7 +204,7 @@ function ReservationForm({
           cartName={cart?.name ?? ""}
           cartColor={cart?.color ?? "#999999"}
           notes={step.input.notes ?? null}
-          periodsLabel={describePeriodRange(schedule.periods, step.input.startTime, step.input.endTime)}
+          periodsLabel={describeWithSchedules(schedule.schedules, step.input.startTime, step.input.endTime)}
         />
         {cart && (
           <StatusMessage kind="info">
@@ -259,7 +271,7 @@ function ReservationForm({
 
       <fieldset className="field-group">
         <legend>Horário</legend>
-        {schedule.periods.length > 0 && (
+        {schedules.length > 0 && (
           <div className="segmented" role="radiogroup" aria-label="Forma de escolher o horário">
             <button
               type="button"
@@ -284,10 +296,22 @@ function ReservationForm({
 
         {values.mode === "period" ? (
           <div className="form-grid">
+            {schedules.length > 1 && (
+              <label className="field full">
+                <span>Horário da turma</span>
+                <select value={values.scheduleId} onChange={(event) => selectSchedule(event.target.value)}>
+                  {schedules.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="field">
               <span>Da aula</span>
               <select value={values.fromPeriodId} onChange={(event) => set("fromPeriodId", event.target.value)}>
-                {schedule.periods.map((period) => (
+                {periods.map((period) => (
                   <option key={period.id} value={period.id}>
                     {period.name} ({period.startTime})
                   </option>
@@ -297,7 +321,7 @@ function ReservationForm({
             <label className="field">
               <span>Até a aula</span>
               <select value={values.toPeriodId} onChange={(event) => set("toPeriodId", event.target.value)}>
-                {schedule.periods.map((period) => (
+                {periods.map((period) => (
                   <option key={period.id} value={period.id}>
                     {period.name} (até {period.endTime})
                   </option>

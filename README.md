@@ -33,9 +33,13 @@ Copie os exemplos e preencha. Os arquivos `.env` e `.env.*` não são versionado
 
 `SUPABASE_SERVICE_ROLE_KEY` e as URLs do banco existem somente na API. O frontend recebe apenas a URL do Supabase e a chave pública (anon/publishable).
 
+## Link da agenda para os professores
+
+Professores não fazem login. A agenda e as reservas exigem o código de acesso que vai no próprio link (`/?acesso=...`); sem ele, a página pede o link ao TI. O código é gerado pela migration e fica em **Administração do TI → Configurações**, onde o link pode ser copiado. "Gerar novo link" invalida o anterior na hora. O frontend guarda o código no navegador e retira o parâmetro da barra de endereço.
+
 ## E-mail de novas reservas
 
-Cada reserva confirmada gera um e-mail para os endereços cadastrados em **Coordenação → Configurações**. A mensagem é gravada na tabela `notification_outbox` na mesma transação da reserva e enviada logo após a resposta; se o envio falhar, a reserva continua confirmada e o e-mail é reenviado com espera crescente (até 5 tentativas).
+Cada reserva confirmada gera um e-mail para os endereços cadastrados em **Administração do TI → Configurações**. A mensagem é gravada na tabela `notification_outbox` na mesma transação da reserva e enviada logo após a resposta; se o envio falhar, a reserva continua confirmada e o e-mail é reenviado com espera crescente (até 5 tentativas).
 
 | Variável | Uso |
 |---|---|
@@ -73,7 +77,7 @@ npm run dev:web   # http://localhost:5173
 
 ## Modo demonstração (sem Supabase)
 
-Roda API e frontend com dados fictícios. A agenda (`/`) é pública; a área da coordenação (`/admin`) usa um login de desenvolvimento por escolha de usuário, sem e-mail. Usa um banco separado (`chromebook_demo`).
+Roda API e frontend com dados fictícios. A agenda (`/`) é pública; a área do TI (`/admin`) usa um login de desenvolvimento por escolha de usuário, sem e-mail. Usa um banco separado (`chromebook_demo`).
 
 1. Crie o banco: `create database chromebook_demo owner chromebook_dev;`
 2. Copie `apps/api/.env.demo.example` para `apps/api/.env.demo` (defina `DEV_AUTH_SECRET` com 32+ caracteres aleatórios) e `apps/web/.env.demo.example` para `apps/web/.env.demo`.

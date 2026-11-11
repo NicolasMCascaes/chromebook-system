@@ -48,6 +48,7 @@ export const SLOT_MINUTES_OPTIONS = [5, 10, 15, 20, 30, 60] as const;
 
 export const MAX_ADMIN_RANGE_DAYS = 366;
 export const MAX_CLASS_PERIODS = 15;
+export const MAX_CLASS_SCHEDULES = 5;
 export const MAX_NOTIFICATION_EMAILS = 10;
 
 export const NOTIFICATION_STATUSES = ["PENDING", "SENT", "FAILED"] as const;

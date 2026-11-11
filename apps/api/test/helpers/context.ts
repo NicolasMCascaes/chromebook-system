@@ -11,6 +11,7 @@ import type { Clock } from "@/lib/clock";
 import type { EmailMessage, EmailSender } from "@/lib/email/sender";
 
 export const TEST_ISSUER = "http://supabase.test/auth/v1";
+export const TEST_ACCESS_CODE = "codigo-de-acesso-de-teste";
 export const TEST_CRON_SECRET = "test-cron-secret-0123456789abcdefghij";
 
 export class FakeAuthAdminGateway implements AuthAdminGateway {
@@ -115,14 +116,26 @@ export async function createTestContext() {
   async function reset(): Promise<void> {
     await client.unsafe(`
       truncate app.notification_outbox, app.reservations, app.calendar_blocks, app.chromebooks, app.carts, app.users cascade;
-      update app.school_settings set opening_time = '07:00', closing_time = '18:00', slot_minutes = 5, notification_emails = '{}';
+      update app.school_settings set opening_time = '07:00', closing_time = '18:00', slot_minutes = 5,
+        notification_emails = '{}', public_access_code = '${TEST_ACCESS_CODE}';
       delete from app.class_periods;
-      insert into app.class_periods (name, start_time, end_time) values
-        ('1ª aula', '07:20', '08:10'),
-        ('2ª aula', '08:10', '09:00'),
-        ('3ª aula', '09:00', '09:50'),
-        ('4ª aula', '10:10', '11:00'),
-        ('5ª aula', '11:00', '11:50');
+      delete from app.class_schedules;
+      insert into app.class_schedules (name, display_order) values ('6º A, 6º B e 7º ano', 1), ('Demais turmas', 2);
+      insert into app.class_periods (schedule_id, name, start_time, end_time)
+      select s.id, v.name, v.start_time::time, v.end_time::time
+      from app.class_schedules s
+      join (values
+        ('6º A, 6º B e 7º ano', '1ª aula', '07:20', '08:10'),
+        ('6º A, 6º B e 7º ano', '2ª aula', '08:10', '09:00'),
+        ('6º A, 6º B e 7º ano', '3ª aula', '09:20', '10:10'),
+        ('6º A, 6º B e 7º ano', '4ª aula', '10:10', '11:00'),
+        ('6º A, 6º B e 7º ano', '5ª aula', '11:00', '11:50'),
+        ('Demais turmas', '1ª aula', '07:20', '08:10'),
+        ('Demais turmas', '2ª aula', '08:10', '09:00'),
+        ('Demais turmas', '3ª aula', '09:00', '09:50'),
+        ('Demais turmas', '4ª aula', '10:10', '11:00'),
+        ('Demais turmas', '5ª aula', '11:00', '11:50')
+      ) as v (schedule_name, name, start_time, end_time) on v.schedule_name = s.name;
     `);
     authAdmin.idsByEmail.clear();
     emailSender.clear();

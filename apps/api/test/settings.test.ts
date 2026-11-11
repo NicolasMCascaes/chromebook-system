@@ -2,14 +2,21 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { CalendarDto, ReservationDto, SchoolSettingsDto, SchoolSettingsMutationDto } from "@chromebook/shared";
 import * as settingsRoute from "@/app/api/admin/settings/route";
 import * as calendarRoute from "@/app/api/calendar/route";
-import { createTestContext, type TestContext, type TestUser } from "./helpers/context";
+import { createTestContext, TEST_ACCESS_CODE, type TestContext, type TestUser } from "./helpers/context";
 import { apiRequest, params } from "./helpers/http";
 import { createTeacher, NEXT_TUESDAY, postReservation, seedCarts } from "./helpers/reservations";
 
-const DEFAULT_PERIODS = [
-  { name: "1ª aula", startTime: "07:20", endTime: "08:10" },
-  { name: "2ª aula", startTime: "08:10", endTime: "09:00" },
+const DEFAULT_SCHEDULES = [
+  {
+    name: "Manhã",
+    periods: [
+      { name: "1ª aula", startTime: "07:20", endTime: "08:10" },
+      { name: "2ª aula", startTime: "08:10", endTime: "09:00" },
+    ],
+  },
 ];
+
+const singleSchedule = (periods: { name: string; startTime: string; endTime: string }[]) => [{ name: "Manhã", periods }];
 
 describe("configurações da escola", () => {
   let ctx: TestContext;
@@ -36,7 +43,7 @@ describe("configurações da escola", () => {
     closingTime: "12:00",
     slotMinutes: 10,
     notificationEmails: ["coordenacao@escola.test"],
-    periods: DEFAULT_PERIODS,
+    schedules: DEFAULT_SCHEDULES,
     ...overrides,
   });
 
@@ -45,7 +52,11 @@ describe("configurações da escola", () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as SchoolSettingsDto;
     expect(body).toMatchObject({ openingTime: "07:00", closingTime: "18:00", slotMinutes: 5, notificationEmails: [] });
-    expect(body.periods).toHaveLength(5);
+    expect(body.schedules.map((schedule) => `${schedule.name}: ${schedule.periods.length}`)).toEqual([
+      "6º A, 6º B e 7º ano: 5",
+      "Demais turmas: 5",
+    ]);
+    expect(body.publicAccessCode).toBe(TEST_ACCESS_CODE);
   });
 
   it("salva horário, e-mails e aulas, e a agenda passa a usá-los", async () => {
@@ -53,13 +64,14 @@ describe("configurações da escola", () => {
     expect(response.status).toBe(200);
     const { settings } = (await response.json()) as SchoolSettingsMutationDto;
     expect(settings).toMatchObject({ closingTime: "12:00", slotMinutes: 10, notificationEmails: ["coordenacao@escola.test"] });
-    expect(settings.periods.map((period) => period.name)).toEqual(["1ª aula", "2ª aula"]);
+    expect(settings.schedules.map((schedule) => schedule.name)).toEqual(["Manhã"]);
+    expect(settings.schedules[0]!.periods.map((period) => period.name)).toEqual(["1ª aula", "2ª aula"]);
 
     const calendar = (await (
       await calendarRoute.GET(apiRequest(`/api/calendar?from=${NEXT_TUESDAY}&to=${NEXT_TUESDAY}`), params())
     ).json()) as CalendarDto;
     expect(calendar.hours).toEqual({ openingTime: "07:00", closingTime: "12:00", slotMinutes: 10 });
-    expect(calendar.periods).toHaveLength(2);
+    expect(calendar.schedules[0]!.periods).toHaveLength(2);
 
     const outside = await postReservation(createTeacher(), { cartId: cart1, startTime: "13:00", endTime: "14:00" });
     expect(outside.status).toBe(422);
@@ -84,22 +96,29 @@ describe("configurações da escola", () => {
     await expectInvalid({ closingTime: "06:00" });
     await expectInvalid({ slotMinutes: 7 });
     await expectInvalid({ openingTime: "07:05" });
-    await expectInvalid({ periods: [{ name: "1ª aula", startTime: "06:00", endTime: "07:00" }] });
-    await expectInvalid({ periods: [{ name: "1ª aula", startTime: "07:20", endTime: "08:15" }] });
+    await expectInvalid({ schedules: singleSchedule([{ name: "1ª aula", startTime: "06:00", endTime: "07:00" }]) });
+    await expectInvalid({ schedules: singleSchedule([{ name: "1ª aula", startTime: "07:20", endTime: "08:15" }]) });
     await expectInvalid({
-      periods: [
+      schedules: singleSchedule([
         { name: "1ª aula", startTime: "07:20", endTime: "08:10" },
         { name: "2ª aula", startTime: "08:00", endTime: "09:00" },
-      ],
+      ]),
     });
+    await expectInvalid({ schedules: [...DEFAULT_SCHEDULES, { name: "manhã", periods: [] }] });
     await expectInvalid({ notificationEmails: ["não é e-mail"] });
     await expectInvalid({ notificationEmails: ["a@escola.test", "A@escola.test"] });
   });
 
-  it("aceita escola sem aulas cadastradas", async () => {
-    const response = await save(validInput({ periods: [] }));
+  it("aceita escola sem grades cadastradas", async () => {
+    const response = await save(validInput({ schedules: [] }));
     expect(response.status).toBe(200);
-    expect(((await response.json()) as SchoolSettingsMutationDto).settings.periods).toEqual([]);
+    expect(((await response.json()) as SchoolSettingsMutationDto).settings.schedules).toEqual([]);
+  });
+
+  it("permite o mesmo horário de aula em grades diferentes", async () => {
+    const period = { name: "1ª aula", startTime: "07:20", endTime: "08:10" };
+    const response = await save(validInput({ schedules: [{ name: "Grade A", periods: [period] }, { name: "Grade B", periods: [period] }] }));
+    expect(response.status).toBe(200);
   });
 
   it("exige administrador", async () => {

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { z } from "zod";
 import {
   schoolNow,
@@ -13,20 +14,23 @@ import { toAdminReservationDto } from "@/modules/reservations/mapper";
 import { startsInFuture } from "@/modules/reservations/rules";
 import {
   getNotificationEmails,
+  getPublicAccessCode,
   getSchoolHours,
-  listClassPeriods,
+  listClassSchedules,
   lockSchoolSettings,
-  replaceClassPeriods,
+  replaceClassSchedules,
+  updatePublicAccessCode,
   updateSchoolSettings,
 } from "./repository";
 
 export async function getSchoolSettings(container: AppContainer): Promise<SchoolSettingsDto> {
-  const [hours, notificationEmails, periods] = await Promise.all([
+  const [hours, notificationEmails, schedules, publicAccessCode] = await Promise.all([
     getSchoolHours(container.db),
     getNotificationEmails(container.db),
-    listClassPeriods(container.db),
+    listClassSchedules(container.db),
+    getPublicAccessCode(container.db),
   ]);
-  return { ...hours, notificationEmails, periods };
+  return { ...hours, notificationEmails, schedules, publicAccessCode };
 }
 
 function fitsSchoolHours(view: ReservationView, hours: SchoolHoursDto): boolean {
@@ -44,11 +48,11 @@ export async function saveSchoolSettings(
   container: AppContainer,
   input: z.output<typeof schoolSettingsInputSchema>,
 ): Promise<SchoolSettingsMutationDto> {
-  const { periods, ...values } = input;
+  const { schedules, ...values } = input;
   await container.db.transaction(async (tx) => {
     await lockSchoolSettings(tx);
     await updateSchoolSettings(tx, values);
-    await replaceClassPeriods(tx, periods);
+    await replaceClassSchedules(tx, schedules);
   });
 
   const settings = await getSchoolSettings(container);
@@ -58,4 +62,9 @@ export async function saveSchoolSettings(
     .filter((view) => startsInFuture(view.reservationDate, view.startTime, now) && !fitsSchoolHours(view, settings))
     .map((view) => toAdminReservationDto(view, now));
   return { settings, affectedReservations };
+}
+
+export async function regeneratePublicAccessCode(container: AppContainer): Promise<SchoolSettingsDto> {
+  await updatePublicAccessCode(container.db, randomBytes(24).toString("base64url"));
+  return getSchoolSettings(container);
 }

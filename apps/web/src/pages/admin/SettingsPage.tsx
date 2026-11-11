@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import {
   MAX_CLASS_PERIODS,
+  MAX_CLASS_SCHEDULES,
   minutesToTime,
   schoolSettingsInputSchema,
   SLOT_MINUTES_OPTIONS,
@@ -8,11 +9,12 @@ import {
   type AdminReservationDto,
   type SchoolSettingsDto,
 } from "@chromebook/shared";
-import { useAdminSettings, useSaveSettings } from "../../api/hooks";
+import { useAdminSettings, useRegenerateAccessCode, useSaveSettings } from "../../api/hooks";
 import { errorMessage } from "../../api/client";
 import { StatusMessage } from "../../components/StatusMessage";
 import { FieldError } from "../../components/FieldError";
 import { AffectedReservations } from "../../features/admin/AffectedReservations";
+import { publicAgendaLink, rememberAccessCode } from "../../lib/access-code";
 import { apiFieldErrors, zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
 
 interface PeriodRow {
@@ -22,31 +24,134 @@ interface PeriodRow {
   endTime: string;
 }
 
+interface ScheduleRow {
+  key: number;
+  name: string;
+  periods: PeriodRow[];
+}
+
 const DEFAULT_PERIOD_MINUTES = 50;
+const LAST_START_MINUTES = 23 * 60 + 55;
+
+function PublicLinkSection({ accessCode }: { accessCode: string }) {
+  const regenerate = useRegenerateAccessCode();
+  const [confirming, setConfirming] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const link = publicAgendaLink(accessCode);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <section className="card form">
+      <h2>Link para os professores</h2>
+      <p className="muted small-text">
+        Só quem tem este link vê a agenda e faz reservas. Envie aos professores pelo canal da escola.
+      </p>
+      <div className="public-link">
+        <input readOnly value={link} aria-label="Link da agenda" onFocus={(event) => event.target.select()} />
+        <button type="button" className="button secondary" onClick={() => void copy()}>
+          {copied ? "Copiado" : "Copiar link"}
+        </button>
+      </div>
+      {regenerate.isError && <StatusMessage kind="error">{errorMessage(regenerate.error)}</StatusMessage>}
+      {regenerate.isSuccess && !confirming && (
+        <StatusMessage kind="success">Novo link gerado. O link anterior deixou de funcionar.</StatusMessage>
+      )}
+      {confirming ? (
+        <div className="stack">
+          <StatusMessage kind="info">
+            O link atual deixará de funcionar imediatamente e será preciso enviar o novo link a todos os professores.
+          </StatusMessage>
+          <div className="actions">
+            <button type="button" className="button secondary" onClick={() => setConfirming(false)}>
+              Manter link atual
+            </button>
+            <button
+              type="button"
+              className="button danger"
+              disabled={regenerate.isPending}
+              onClick={() =>
+                regenerate.mutate(undefined, {
+                  onSuccess: (settings) => {
+                    rememberAccessCode(settings.publicAccessCode);
+                    setCopied(false);
+                    setConfirming(false);
+                  },
+                })
+              }
+            >
+              {regenerate.isPending ? "Gerando…" : "Gerar novo link"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <button type="button" className="button danger-outline" onClick={() => setConfirming(true)}>
+            Gerar novo link
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
 
 function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
   const [openingTime, setOpeningTime] = useState(settings.openingTime);
   const [closingTime, setClosingTime] = useState(settings.closingTime);
   const [slotMinutes, setSlotMinutes] = useState(settings.slotMinutes);
   const [emails, setEmails] = useState(settings.notificationEmails.join("\n"));
-  const [periods, setPeriods] = useState<PeriodRow[]>(() => settings.periods.map((period, index) => ({ key: index, ...period })));
-  const [nextKey, setNextKey] = useState(settings.periods.length);
+  const nextKey = useRef(1000);
+  const [schedules, setSchedules] = useState<ScheduleRow[]>(() =>
+    settings.schedules.map((schedule, scheduleIndex) => ({
+      key: scheduleIndex,
+      name: schedule.name,
+      periods: schedule.periods.map((period, periodIndex) => ({ key: scheduleIndex * 100 + periodIndex, ...period })),
+    })),
+  );
   const [errors, setErrors] = useState<FieldErrors>({});
   const [affected, setAffected] = useState<AdminReservationDto[] | null>(null);
   const save = useSaveSettings();
 
-  const updatePeriod = (key: number, changes: Partial<PeriodRow>) =>
-    setPeriods((current) => current.map((period) => (period.key === key ? { ...period, ...changes } : period)));
+  function takeKey(): number {
+    nextKey.current += 1;
+    return nextKey.current;
+  }
 
-  function addPeriod() {
-    const last = periods.at(-1);
-    const start = last ? timeToMinutes(last.endTime) : timeToMinutes(openingTime);
-    const end = Math.min(start + DEFAULT_PERIOD_MINUTES, 23 * 60 + 55);
-    setPeriods((current) => [
-      ...current,
-      { key: nextKey, name: `${current.length + 1}ª aula`, startTime: minutesToTime(start), endTime: minutesToTime(end) },
-    ]);
-    setNextKey(nextKey + 1);
+  const updateSchedule = (key: number, change: (schedule: ScheduleRow) => ScheduleRow) =>
+    setSchedules((current) => current.map((schedule) => (schedule.key === key ? change(schedule) : schedule)));
+
+  const updatePeriod = (scheduleKey: number, periodKey: number, changes: Partial<PeriodRow>) =>
+    updateSchedule(scheduleKey, (schedule) => ({
+      ...schedule,
+      periods: schedule.periods.map((period) => (period.key === periodKey ? { ...period, ...changes } : period)),
+    }));
+
+  function addPeriod(scheduleKey: number) {
+    const key = takeKey();
+    updateSchedule(scheduleKey, (schedule) => {
+      const last = schedule.periods.at(-1);
+      const start = Math.min(last ? timeToMinutes(last.endTime) : timeToMinutes(openingTime), LAST_START_MINUTES);
+      const end = Math.min(start + DEFAULT_PERIOD_MINUTES, LAST_START_MINUTES);
+      return {
+        ...schedule,
+        periods: [
+          ...schedule.periods,
+          { key, name: `${schedule.periods.length + 1}ª aula`, startTime: minutesToTime(start), endTime: minutesToTime(end) },
+        ],
+      };
+    });
+  }
+
+  function addSchedule() {
+    const key = takeKey();
+    setSchedules((current) => [...current, { key, name: "", periods: [] }]);
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -60,7 +165,10 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
         .split(/[\s,;]+/)
         .map((email) => email.trim())
         .filter(Boolean),
-      periods: periods.map(({ name, startTime, endTime }) => ({ name, startTime, endTime })),
+      schedules: schedules.map((schedule) => ({
+        name: schedule.name,
+        periods: schedule.periods.map(({ name, startTime, endTime }) => ({ name, startTime, endTime })),
+      })),
     });
     if (!parsed.success) {
       setErrors(zodFieldErrors(parsed.error));
@@ -75,9 +183,7 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
     }
   }
 
-  const emailError = Object.entries(errors).find(([path]) => path.startsWith("notificationEmails"))?.[1];
-  const periodError = (index: number) =>
-    Object.entries(errors).find(([path]) => path.startsWith(`periods.${index}.`))?.[1];
+  const errorAt = (prefix: string) => Object.entries(errors).find(([path]) => path.startsWith(prefix))?.[1];
 
   return (
     <form className="stack" onSubmit={handleSubmit} noValidate>
@@ -110,38 +216,91 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
       </section>
 
       <section className="card form">
-        <h2>Aulas</h2>
-        <p className="muted small-text">O professor pode escolher o horário pelas aulas ao reservar.</p>
-        {periods.length === 0 && <StatusMessage kind="empty">Nenhuma aula cadastrada.</StatusMessage>}
-        {periods.map((period, index) => (
-          <div key={period.key} className="period-row">
-            <label className="field">
-              <span>Nome</span>
-              <input value={period.name} maxLength={40} onChange={(event) => updatePeriod(period.key, { name: event.target.value })} />
-            </label>
-            <label className="field">
-              <span>Início</span>
-              <input type="time" value={period.startTime} onChange={(event) => updatePeriod(period.key, { startTime: event.target.value })} />
-            </label>
-            <label className="field">
-              <span>Término</span>
-              <input type="time" value={period.endTime} onChange={(event) => updatePeriod(period.key, { endTime: event.target.value })} />
-            </label>
-            <button
-              type="button"
-              className="button link danger-text"
-              aria-label={`Remover ${period.name}`}
-              onClick={() => setPeriods((current) => current.filter((item) => item.key !== period.key))}
-            >
-              Remover
-            </button>
-            <FieldError message={periodError(index)} />
+        <h2>Grades de aulas</h2>
+        <p className="muted small-text">
+          Cada grade tem as próprias aulas e intervalos. Ao reservar por aula, o professor escolhe a grade da turma.
+        </p>
+        {schedules.length === 0 && <StatusMessage kind="empty">Nenhuma grade cadastrada.</StatusMessage>}
+        {schedules.map((schedule, scheduleIndex) => (
+          <div key={schedule.key} className="stack schedule-card">
+            <div className="schedule-header">
+              <label className="field">
+                <span>Turmas desta grade</span>
+                <input
+                  value={schedule.name}
+                  maxLength={60}
+                  placeholder="Ex.: 6º A, 6º B e 7º ano"
+                  onChange={(event) => updateSchedule(schedule.key, (current) => ({ ...current, name: event.target.value }))}
+                />
+                <FieldError message={errors[`schedules.${scheduleIndex}.name`]} />
+              </label>
+              <button
+                type="button"
+                className="button link danger-text"
+                onClick={() => setSchedules((current) => current.filter((item) => item.key !== schedule.key))}
+              >
+                Remover grade
+              </button>
+            </div>
+            {schedule.periods.map((period, periodIndex) => (
+              <div key={period.key} className="period-row">
+                <label className="field">
+                  <span>Aula</span>
+                  <input
+                    value={period.name}
+                    maxLength={40}
+                    onChange={(event) => updatePeriod(schedule.key, period.key, { name: event.target.value })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Início</span>
+                  <input
+                    type="time"
+                    value={period.startTime}
+                    onChange={(event) => updatePeriod(schedule.key, period.key, { startTime: event.target.value })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Término</span>
+                  <input
+                    type="time"
+                    value={period.endTime}
+                    onChange={(event) => updatePeriod(schedule.key, period.key, { endTime: event.target.value })}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="button link danger-text"
+                  aria-label={`Remover ${period.name}`}
+                  onClick={() =>
+                    updateSchedule(schedule.key, (current) => ({
+                      ...current,
+                      periods: current.periods.filter((item) => item.key !== period.key),
+                    }))
+                  }
+                >
+                  Remover
+                </button>
+                <FieldError message={errorAt(`schedules.${scheduleIndex}.periods.${periodIndex}.`)} />
+              </div>
+            ))}
+            <FieldError message={errors[`schedules.${scheduleIndex}.periods`]} />
+            <div>
+              <button
+                type="button"
+                className="button secondary"
+                disabled={schedule.periods.length >= MAX_CLASS_PERIODS}
+                onClick={() => addPeriod(schedule.key)}
+              >
+                Adicionar aula
+              </button>
+            </div>
           </div>
         ))}
-        <FieldError message={errors.periods} />
+        <FieldError message={errors.schedules} />
         <div>
-          <button type="button" className="button secondary" disabled={periods.length >= MAX_CLASS_PERIODS} onClick={addPeriod}>
-            Adicionar aula
+          <button type="button" className="button secondary" disabled={schedules.length >= MAX_CLASS_SCHEDULES} onClick={addSchedule}>
+            Adicionar grade
           </button>
         </div>
       </section>
@@ -151,7 +310,7 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
         <label className="field">
           <span>E-mails que recebem cada nova reserva (um por linha)</span>
           <textarea value={emails} rows={3} onChange={(event) => setEmails(event.target.value)} />
-          <FieldError message={emailError} />
+          <FieldError message={errorAt("notificationEmails")} />
         </label>
       </section>
 
@@ -175,5 +334,10 @@ export function SettingsPage() {
   const settings = useAdminSettings();
   if (settings.isPending) return <StatusMessage kind="loading">Carregando configurações…</StatusMessage>;
   if (settings.isError) return <StatusMessage kind="error">{errorMessage(settings.error)}</StatusMessage>;
-  return <SettingsForm settings={settings.data} />;
+  return (
+    <div className="stack">
+      <PublicLinkSection accessCode={settings.data.publicAccessCode} />
+      <SettingsForm settings={settings.data} />
+    </div>
+  );
 }

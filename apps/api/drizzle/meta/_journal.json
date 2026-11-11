@@ -36,6 +36,20 @@
       "when": 1763164800000,
       "tag": "0004_notifications",
       "breakpoints": false
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1763251200000,
+      "tag": "0005_class_schedules",
+      "breakpoints": false
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1763337600000,
+      "tag": "0006_public_access_code",
+      "breakpoints": false
     }
   ]
 }

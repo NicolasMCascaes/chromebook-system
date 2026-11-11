@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { reservationInputSchema } from "@chromebook/shared";
 import { getContainer } from "@/lib/container";
-import { authenticateAdminIfPresent } from "@/lib/auth/authenticate";
+import { authorizePublicAccess } from "@/lib/auth/authenticate";
 import { AppError } from "@/lib/http/errors";
 import { json, readJson } from "@/lib/http/responses";
 import { route } from "@/lib/http/route";
@@ -22,7 +22,7 @@ function readIdempotencyKey(request: Request): string {
 
 export const POST = route(async (request) => {
   const container = getContainer();
-  const admin = await authenticateAdminIfPresent(request, container);
+  const admin = await authorizePublicAccess(request, container);
   const idempotencyKey = readIdempotencyKey(request);
   const input = await readJson(request, reservationInputSchema);
   const { reservation, replayed } = await createReservation(container, admin, input, idempotencyKey);

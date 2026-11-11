@@ -192,7 +192,7 @@ export async function cancelReservation(
   const audience: ReservationAudience = admin ? "admin" : "owner";
   if (!admin && !matchesCancelToken(view, input.cancelToken)) {
     throw AppError.forbidden(
-      "Não foi possível confirmar que você criou esta reserva. Peça o cancelamento à coordenação.",
+      "Não foi possível confirmar que você criou esta reserva. Peça o cancelamento ao TI.",
     );
   }
 

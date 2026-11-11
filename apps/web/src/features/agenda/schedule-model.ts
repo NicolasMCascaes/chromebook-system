@@ -8,6 +8,7 @@ import {
   type CalendarBlockDto,
   type CalendarDto,
   type ClassPeriodDto,
+  type ClassScheduleDto,
   type ReservationDto,
   type SchoolHoursDto,
   type SchoolNow,
@@ -105,6 +106,27 @@ export function describePeriodRange(periods: ClassPeriodDto[], startTime: string
   const from = periods.find((period) => period.id === selection.fromPeriodId)!;
   const to = periods.find((period) => period.id === selection.toPeriodId)!;
   return from.id === to.id ? from.name : `${from.name} até ${to.name}`;
+}
+
+export function describeWithSchedules(schedules: ClassScheduleDto[], startTime: string, endTime: string): string | null {
+  const matches = schedules
+    .map((schedule) => ({ schedule, label: describePeriodRange(schedule.periods, startTime, endTime) }))
+    .filter((entry): entry is { schedule: ClassScheduleDto; label: string } => entry.label !== null);
+  if (matches.length === 0) return null;
+  if (schedules.length === 1 || matches.length === schedules.length) return matches[0]!.label;
+  return matches.map((entry) => `${entry.label}, ${entry.schedule.name}`).join("; ");
+}
+
+export function findMatchingSchedule(
+  schedules: ClassScheduleDto[],
+  startTime: string,
+  endTime: string,
+): { schedule: ClassScheduleDto; selection: PeriodSelection } | null {
+  for (const schedule of schedules) {
+    const selection = matchPeriods(schedule.periods, startTime, endTime);
+    if (selection) return { schedule, selection };
+  }
+  return null;
 }
 
 export function overlapsReservation(

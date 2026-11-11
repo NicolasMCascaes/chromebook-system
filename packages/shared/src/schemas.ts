@@ -5,6 +5,7 @@ import {
   MAX_ADMIN_RANGE_DAYS,
   MAX_CALENDAR_RANGE_DAYS,
   MAX_CLASS_PERIODS,
+  MAX_CLASS_SCHEDULES,
   MAX_NOTIFICATION_EMAILS,
   RESERVATION_STATUSES,
   SLOT_MINUTES_OPTIONS,
@@ -247,7 +248,14 @@ export const schoolSettingsInputSchema = z
       .array(emailAddress)
       .max(MAX_NOTIFICATION_EMAILS, `Informe no máximo ${MAX_NOTIFICATION_EMAILS} e-mails.`)
       .refine((emails) => new Set(emails).size === emails.length, "Há e-mails repetidos."),
-    periods: z.array(classPeriodInputSchema).max(MAX_CLASS_PERIODS, `Cadastre no máximo ${MAX_CLASS_PERIODS} aulas.`),
+    schedules: z
+      .array(
+        z.object({
+          name: requiredText("Nome da grade", 60),
+          periods: z.array(classPeriodInputSchema).max(MAX_CLASS_PERIODS, `Cadastre no máximo ${MAX_CLASS_PERIODS} aulas por grade.`),
+        }),
+      )
+      .max(MAX_CLASS_SCHEDULES, `Cadastre no máximo ${MAX_CLASS_SCHEDULES} grades de horário.`),
   })
   .superRefine((value, context) => {
     const opening = timeToMinutes(value.openingTime);
@@ -263,31 +271,32 @@ export const schoolSettingsInputSchema = z
         path: ["slotMinutes"],
       });
     }
-    const sorted = value.periods
-      .map((period, index) => ({ ...period, index, start: timeToMinutes(period.startTime), end: timeToMinutes(period.endTime) }))
-      .sort((a, b) => a.start - b.start);
-    sorted.forEach((period, position) => {
-      if (period.start < opening || period.end > closing) {
-        context.addIssue({
-          code: "custom",
-          message: `${period.name} está fora do horário de funcionamento.`,
-          path: ["periods", period.index, "startTime"],
-        });
-      } else if (period.start % value.slotMinutes !== 0 || period.end % value.slotMinutes !== 0) {
-        context.addIssue({
-          code: "custom",
-          message: `Os horários de ${period.name} devem ser múltiplos de ${value.slotMinutes} minutos.`,
-          path: ["periods", period.index, "startTime"],
-        });
+    const names = value.schedules.map((schedule) => schedule.name.toLocaleLowerCase("pt-BR"));
+    value.schedules.forEach((schedule, scheduleIndex) => {
+      if (names.indexOf(names[scheduleIndex]!) !== scheduleIndex) {
+        context.addIssue({ code: "custom", message: "Há grades com o mesmo nome.", path: ["schedules", scheduleIndex, "name"] });
       }
-      const previous = sorted[position - 1];
-      if (previous && period.start < previous.end) {
-        context.addIssue({
-          code: "custom",
-          message: `${period.name} se sobrepõe a ${previous.name}.`,
-          path: ["periods", period.index, "startTime"],
-        });
-      }
+      const sorted = schedule.periods
+        .map((period, index) => ({ ...period, index, start: timeToMinutes(period.startTime), end: timeToMinutes(period.endTime) }))
+        .sort((a, b) => a.start - b.start);
+      sorted.forEach((period, position) => {
+        const path = ["schedules", scheduleIndex, "periods", period.index, "startTime"];
+        if (period.start < opening || period.end > closing) {
+          context.addIssue({ code: "custom", message: `${period.name} está fora do horário de funcionamento.`, path });
+        } else if (period.start % value.slotMinutes !== 0 || period.end % value.slotMinutes !== 0) {
+          context.addIssue({
+            code: "custom",
+            message: `Os horários de ${period.name} devem ser múltiplos de ${value.slotMinutes} minutos.`,
+            path,
+          });
+        }
+        const previous = sorted[position - 1];
+        if (previous && period.start < previous.end) {
+          context.addIssue({ code: "custom", message: `${period.name} se sobrepõe a ${previous.name}.`, path });
+        }
+      });
     });
   });
 export type SchoolSettingsInput = z.input<typeof schoolSettingsInputSchema>;
+
+export const ACCESS_CODE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;

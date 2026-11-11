@@ -9,7 +9,7 @@ export function PublicLayout() {
         <div className="user-box">
           <ThemeToggle />
           <Link to="/admin" className="button link">
-            Área da coordenação
+            Área do TI
           </Link>
         </div>
       </header>

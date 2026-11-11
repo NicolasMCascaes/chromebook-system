@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import type { MeDto } from "@chromebook/shared";
 import { useAuth } from "./AuthProvider";
@@ -22,8 +22,13 @@ export function RequireAuth() {
   const { session, loading, signOut } = useAuth();
   const location = useLocation();
   const me = useMe(Boolean(session));
+  const sessionRejected = me.error instanceof ApiError && me.error.status === 401;
 
-  if (loading || (session && me.isPending)) {
+  useEffect(() => {
+    if (sessionRejected) void signOut();
+  }, [sessionRejected, signOut]);
+
+  if (loading || (session && (me.isPending || sessionRejected))) {
     return (
       <FullPage>
         <StatusMessage kind="loading">Carregando…</StatusMessage>
@@ -31,7 +36,7 @@ export function RequireAuth() {
     );
   }
 
-  if (!session || (me.error instanceof ApiError && me.error.status === 401)) {
+  if (!session) {
     return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
   }
 
@@ -59,7 +64,7 @@ export function RequireAdmin() {
   if (user.role !== "ADMIN") {
     return (
       <FullPage>
-        <StatusMessage kind="error">Esta área é exclusiva da coordenação.</StatusMessage>
+        <StatusMessage kind="error">Esta área é exclusiva do TI.</StatusMessage>
         <button type="button" className="button secondary" onClick={() => void signOut()}>
           Sair
         </button>

@@ -33,7 +33,7 @@ try {
 
   const [admin] = (await db
     .insert(users)
-    .values({ id: randomUUID(), email: "admin@escola.demo", name: "Coordenação", role: "ADMIN" })
+    .values({ id: randomUUID(), email: "admin@escola.demo", name: "TI", role: "ADMIN" })
     .returning({ id: users.id })) as [{ id: string }];
 
   const [acer, samsung] = (await db

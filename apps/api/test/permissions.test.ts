@@ -125,10 +125,10 @@ describe("permissões de professor e administrador", () => {
     }
   });
 
-  it("professor consulta apenas carrinhos ativos com a quantidade operacional", async () => {
+  it("a agenda pública lista apenas carrinhos ativos com a quantidade operacional", async () => {
     await ctx.db.insert(carts).values({ name: "Carrinho inativo", color: "#000000", active: false });
 
-    const response = await publicCarts.GET(apiRequest("/api/carts", { token: professor.token }), params());
+    const response = await publicCarts.GET(apiRequest("/api/carts"), params());
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { name: string; equipment: { available: number } }[];

@@ -64,6 +64,7 @@ export const schoolSettings = app.table("school_settings", {
   closingTime: time("closing_time").notNull(),
   slotMinutes: smallint("slot_minutes").notNull(),
   notificationEmails: text("notification_emails").array().notNull().default(sql`'{}'`),
+  publicAccessCode: text("public_access_code").notNull(),
   ...timestamps,
 });
 
@@ -100,8 +101,18 @@ export const reservations = app.table("reservations", {
   ...timestamps,
 });
 
+export const classSchedules = app.table("class_schedules", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  displayOrder: smallint("display_order").notNull().default(0),
+  ...timestamps,
+});
+
 export const classPeriods = app.table("class_periods", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  scheduleId: uuid("schedule_id")
+    .notNull()
+    .references(() => classSchedules.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
   startTime: time("start_time").notNull(),
   endTime: time("end_time").notNull(),

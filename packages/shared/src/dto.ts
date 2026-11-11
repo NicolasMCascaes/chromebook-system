@@ -68,6 +68,12 @@ export interface ClassPeriodDto {
   endTime: string;
 }
 
+export interface ClassScheduleDto {
+  id: string;
+  name: string;
+  periods: ClassPeriodDto[];
+}
+
 export interface ReservationDto {
   id: string;
   cartId: string;
@@ -97,7 +103,7 @@ export interface CalendarDto {
   today: string;
   nowTime: string;
   hours: SchoolHoursDto;
-  periods: ClassPeriodDto[];
+  schedules: ClassScheduleDto[];
   carts: CartDto[];
   reservations: ReservationDto[];
   blocks: CalendarBlockDto[];
@@ -139,7 +145,8 @@ export interface BlockMutationDto {
 
 export interface SchoolSettingsDto extends SchoolHoursDto {
   notificationEmails: string[];
-  periods: ClassPeriodDto[];
+  schedules: ClassScheduleDto[];
+  publicAccessCode: string;
 }
 
 export interface SchoolSettingsMutationDto {

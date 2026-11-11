@@ -1,6 +1,7 @@
 import type { ApiErrorBody } from "@chromebook/shared";
 import { env } from "../lib/env";
 import { sessionSource } from "../auth/session-source";
+import { getAccessCode } from "../lib/access-code";
 
 export class ApiError extends Error {
   constructor(
@@ -32,9 +33,12 @@ function requiresAuth(path: string): boolean {
 }
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const accessToken = requiresAuth(path) ? await sessionSource.getAccessToken() : null;
+  const authenticated = requiresAuth(path);
+  const accessToken = authenticated ? await sessionSource.getAccessToken() : null;
   const headers = new Headers(options.headers);
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+  const accessCode = authenticated ? null : getAccessCode();
+  if (accessCode) headers.set("X-Access-Code", accessCode);
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
 
   let response: Response;
@@ -62,4 +66,8 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
   return "Ocorreu um erro inesperado. Tente novamente.";
+}
+
+export function isAccessDenied(error: unknown): boolean {
+  return error instanceof ApiError && error.body.code === "ACCESS_CODE_INVALID";
 }

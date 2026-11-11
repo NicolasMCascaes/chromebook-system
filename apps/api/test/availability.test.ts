@@ -117,7 +117,8 @@ describe("disponibilidade e agenda", () => {
     expect(status).toBe(200);
     expect(body.today).toBe(TODAY);
     expect(body.hours).toEqual({ openingTime: "07:00", closingTime: "18:00", slotMinutes: 5 });
-    expect(body.periods.map(({ name, startTime, endTime }) => `${name} ${startTime}-${endTime}`)).toEqual([
+    expect(body.schedules.map((schedule) => schedule.name)).toEqual(["6º A, 6º B e 7º ano", "Demais turmas"]);
+    expect(body.schedules[1]!.periods.map(({ name, startTime, endTime }) => `${name} ${startTime}-${endTime}`)).toEqual([
       "1ª aula 07:20-08:10",
       "2ª aula 08:10-09:00",
       "3ª aula 09:00-09:50",

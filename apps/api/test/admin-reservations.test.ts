@@ -16,7 +16,7 @@ import {
   type Teacher,
 } from "./helpers/reservations";
 
-describe("reservas na coordenação", () => {
+describe("reservas na área do TI", () => {
   let ctx: TestContext;
   let admin: TestUser;
   let professor: Teacher;
@@ -95,7 +95,7 @@ describe("reservas na coordenação", () => {
     });
   });
 
-  describe("cancelamento pela coordenação", () => {
+  describe("cancelamento pelo TI", () => {
     it("cancela qualquer reserva, inclusive já iniciada, registrando o motivo", async () => {
       const reservation = await create(professor, { cartId: cart1, date: TODAY, startTime: "10:30", endTime: "11:30" });
       ctx.clock.set("2030-03-04T13:45:00Z");

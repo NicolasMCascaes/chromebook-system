@@ -1,7 +1,9 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { UserRole } from "@chromebook/shared";
 import type { AppContainer } from "../container";
 import { AppError } from "../http/errors";
 import { findUserById } from "@/modules/users/repository";
+import { getPublicAccessCode } from "@/modules/settings/repository";
 
 export interface AuthUser {
   id: string;
@@ -36,4 +38,25 @@ export async function authenticateAdmin(request: Request, container: AppContaine
 export async function authenticateAdminIfPresent(request: Request, container: AppContainer): Promise<AuthUser | null> {
   if (!request.headers.has("authorization")) return null;
   return authenticateAdmin(request, container);
+}
+
+export const ACCESS_CODE_HEADER = "x-access-code";
+
+function digest(value: string): Buffer {
+  return createHash("sha256").update(value).digest();
+}
+
+export async function authorizePublicAccess(request: Request, container: AppContainer): Promise<AuthUser | null> {
+  const admin = await authenticateAdminIfPresent(request, container);
+  if (admin) return admin;
+  const received = request.headers.get(ACCESS_CODE_HEADER);
+  const expected = await getPublicAccessCode(container.db);
+  if (!received || !timingSafeEqual(digest(received), digest(expected))) {
+    throw new AppError(
+      403,
+      "ACCESS_CODE_INVALID",
+      "Este link de acesso à agenda não é válido ou foi substituído. Peça o link atualizado ao TI.",
+    );
+  }
+  return null;
 }
