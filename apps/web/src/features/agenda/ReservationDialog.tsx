@@ -1,8 +1,11 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { lazy, Suspense, useMemo, useState, type FormEvent } from "react";
 import {
   isValidIsoDate,
   reservationInputSchema,
+  schoolNow,
   type CalendarDto,
+  type ClassPeriodDto,
+  type SchoolNow,
   type ReservationDto,
   type ReservationInput,
 } from "@chromebook/shared";
@@ -14,9 +17,12 @@ import { FieldError } from "../../components/FieldError";
 import { StatusMessage } from "../../components/StatusMessage";
 import { formatDateLong, formatTimeRange, plural } from "../../lib/format";
 import { zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
+import { cartSituation, validateReservationForm } from "./reservation-validation";
 import { lastTeacherName, newCancelToken, rememberReservation, rememberTeacherName } from "../../lib/my-reservations";
-import { describeWithSchedules, findMatchingSchedule, overlapsReservation, periodRangeTimes } from "./schedule-model";
+import { describeWithSchedules, findMatchingSchedule, periodRangeTimes } from "./schedule-model";
 import { cartStyle } from "./cart-style";
+
+const DatePickerField = lazy(() => import("./DatePickerField").then((module) => ({ default: module.DatePickerField })));
 
 export interface ReservationPrefill {
   date?: string;
@@ -26,6 +32,8 @@ export interface ReservationPrefill {
 }
 
 type TimeMode = "period" | "custom";
+
+type FieldName = "teacherName" | "className" | "date" | "startTime" | "endTime" | "cartId" | "notes";
 
 interface FormValues {
   teacherName: string;
@@ -53,20 +61,26 @@ interface ReservationDialogProps {
   schedule: Pick<CalendarDto, "schedules" | "carts" | "hours" | "today">;
 }
 
-function initialValues(prefill: ReservationPrefill, schedule: ReservationDialogProps["schedule"]): FormValues {
+function hasStarted(period: ClassPeriodDto, date: string, now: SchoolNow): boolean {
+  return date < now.date || (date === now.date && period.startTime < now.time);
+}
+
+function initialValues(prefill: ReservationPrefill, schedule: ReservationDialogProps["schedule"], now: SchoolNow): FormValues {
   const schedules = schedule.schedules.filter((entry) => entry.periods.length > 0);
   const matched =
     prefill.startTime && prefill.endTime ? findMatchingSchedule(schedules, prefill.startTime, prefill.endTime) : null;
   const usePeriods = schedules.length > 0 && (matched !== null || !prefill.startTime);
   const periods = (matched?.schedule ?? schedules[0])?.periods ?? [];
+  const date = prefill.date ?? schedule.today;
+  const firstPeriod = periods.find((period) => !hasStarted(period, date, now)) ?? periods[0];
   return {
     teacherName: lastTeacherName(),
     className: "",
-    date: prefill.date ?? schedule.today,
+    date,
     mode: usePeriods ? "period" : "custom",
     scheduleId: matched?.schedule.id ?? schedules[0]?.id ?? "",
-    fromPeriodId: matched?.selection.fromPeriodId ?? periods[0]?.id ?? "",
-    toPeriodId: matched?.selection.toPeriodId ?? periods[0]?.id ?? "",
+    fromPeriodId: matched?.selection.fromPeriodId ?? firstPeriod?.id ?? "",
+    toPeriodId: matched?.selection.toPeriodId ?? firstPeriod?.id ?? "",
     startTime: prefill.startTime ?? schedule.hours.openingTime,
     endTime: prefill.endTime ?? "",
     cartId: prefill.cartId ?? (schedule.carts.length === 1 ? schedule.carts[0]!.id : ""),
@@ -79,8 +93,11 @@ function ReservationForm({
   prefill,
   onClose,
 }: Omit<ReservationDialogProps, "open">) {
-  const [values, setValues] = useState<FormValues>(() => initialValues(prefill, schedule));
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const now = useMemo(() => schoolNow(new Date()), []);
+  const [values, setValues] = useState<FormValues>(() => initialValues(prefill, schedule, now));
+  const [serverErrors, setServerErrors] = useState<FieldErrors>({});
+  const [touched, setTouched] = useState<Partial<Record<FieldName, boolean>>>({});
+  const [submitted, setSubmitted] = useState(false);
   const [step, setStep] = useState<Step>({ kind: "form" });
   const create = useCreateReservation();
 
@@ -88,8 +105,11 @@ function ReservationForm({
   const availability = useAvailability(validDate);
   const dayAvailability = availability.data?.date === validDate ? availability.data : undefined;
 
-  const set = <K extends keyof FormValues>(key: K, value: FormValues[K]) =>
+  const set = <K extends keyof FormValues>(key: K, value: FormValues[K]) => {
+    setServerErrors({});
     setValues((current) => ({ ...current, [key]: value }));
+  };
+  const touch = (field: FieldName) => setTouched((current) => ({ ...current, [field]: true }));
 
   const schedules = schedule.schedules.filter((entry) => entry.periods.length > 0);
   const periods = schedules.find((entry) => entry.id === values.scheduleId)?.periods ?? [];
@@ -98,6 +118,13 @@ function ReservationForm({
   function selectSchedule(scheduleId: string) {
     const firstPeriod = schedules.find((entry) => entry.id === scheduleId)?.periods[0]?.id ?? "";
     setValues((current) => ({ ...current, scheduleId, fromPeriodId: firstPeriod, toPeriodId: firstPeriod }));
+  }
+
+  function selectFromPeriod(fromPeriodId: string) {
+    const nextFromIndex = periods.findIndex((period) => period.id === fromPeriodId);
+    const toIndex = periods.findIndex((period) => period.id === values.toPeriodId);
+    setServerErrors({});
+    setValues((current) => ({ ...current, fromPeriodId, toPeriodId: toIndex < nextFromIndex ? fromPeriodId : current.toPeriodId }));
   }
 
   function selectClass(className: string) {
@@ -113,25 +140,45 @@ function ReservationForm({
     return values.startTime && values.endTime ? { startTime: values.startTime, endTime: values.endTime } : null;
   }, [values.mode, values.fromPeriodId, values.toPeriodId, values.startTime, values.endTime, periods]);
 
-  function cartAvailabilityText(cartId: string): { text: string; busy: boolean } | null {
-    const cart = dayAvailability?.carts.find((entry) => entry.cartId === cartId);
-    if (!cart) return null;
-    if (cart.block) return { text: "Indisponível nesta data", busy: true };
-    if (!selectedTimes) return null;
-    const busy = overlapsReservation(
-      cart.busy.map((entry) => ({ startTime: entry.start, endTime: entry.end })),
-      selectedTimes.startTime,
-      selectedTimes.endTime,
-    );
-    return busy ? { text: "Ocupado neste horário", busy: true } : { text: "Livre neste horário", busy: false };
+  const fromIndex = periods.findIndex((period) => period.id === values.fromPeriodId);
+  const cartIds = useMemo(() => schedule.carts.map((cart) => cart.id), [schedule.carts]);
+
+  const errors = useMemo(
+    () =>
+      validateReservationForm(
+        {
+          teacherName: values.teacherName,
+          className: values.className,
+          date: values.date,
+          startTime: selectedTimes?.startTime ?? "",
+          endTime: selectedTimes?.endTime ?? "",
+          cartId: values.cartId,
+          notes: values.notes,
+        },
+        {
+          now,
+          hours: schedule.hours,
+          availability: dayAvailability,
+          invalidPeriodRange: values.mode === "period" && !selectedTimes,
+        },
+      ),
+    [values, selectedTimes, now, schedule.hours, dayAvailability],
+  );
+
+  function isVisible(field: FieldName): boolean {
+    if (submitted || touched[field]) return true;
+    if (field === "date") return true;
+    if (field === "startTime" || field === "endTime") return selectedTimes !== null || values.mode === "period";
+    if (field === "cartId") return values.cartId !== "";
+    return false;
   }
+
+  const errorFor = (field: FieldName) => serverErrors[field] ?? (isVisible(field) ? errors[field] : undefined);
 
   function handleReview(event: FormEvent) {
     event.preventDefault();
-    if (values.mode === "period" && !selectedTimes) {
-      setErrors({ endTime: "A aula final deve ser igual ou posterior à aula inicial." });
-      return;
-    }
+    setSubmitted(true);
+    if (Object.keys(errors).length > 0) return;
     const parsed = reservationInputSchema.safeParse({
       teacherName: values.teacherName,
       cartId: values.cartId,
@@ -143,10 +190,9 @@ function ReservationForm({
       cancelToken: newCancelToken(),
     });
     if (!parsed.success) {
-      setErrors(zodFieldErrors(parsed.error));
+      setServerErrors(zodFieldErrors(parsed.error));
       return;
     }
-    setErrors({});
     create.reset();
     setStep({ kind: "review", input: parsed.data, idempotencyKey: crypto.randomUUID() });
   }
@@ -163,7 +209,7 @@ function ReservationForm({
         return;
       }
       if (error instanceof ApiError && (error.status === 422 || error.status === 400)) {
-        setErrors(error.fieldErrors());
+        setServerErrors(error.fieldErrors());
         setStep({ kind: "form", notice: { kind: "error", text: error.message } });
       }
     }
@@ -262,15 +308,20 @@ function ReservationForm({
             autoComplete="name"
             autoFocus={!values.teacherName}
             onChange={(event) => set("teacherName", event.target.value)}
+            onBlur={() => touch("teacherName")}
           />
-          <FieldError message={errors.teacherName} />
+          <FieldError message={errorFor("teacherName")} />
         </label>
         <label className="field">
           <span>Turma</span>
           <select
             value={values.className}
             autoFocus={Boolean(values.teacherName)}
-            onChange={(event) => selectClass(event.target.value)}
+            onChange={(event) => {
+              selectClass(event.target.value);
+              touch("className");
+            }}
+            onBlur={() => touch("className")}
           >
             <option value="" disabled>
               Selecione a turma
@@ -281,13 +332,19 @@ function ReservationForm({
               </option>
             ))}
           </select>
-          <FieldError message={errors.className} />
+          <FieldError message={errorFor("className")} />
         </label>
-        <label className="field">
+        <div className="field full">
           <span>Data</span>
-          <input type="date" value={values.date} min={schedule.today} onChange={(event) => set("date", event.target.value)} />
-          <FieldError message={errors.date} />
-        </label>
+          <Suspense
+            fallback={
+              <input type="date" value={values.date} min={schedule.today} onChange={(event) => set("date", event.target.value)} />
+            }
+          >
+            <DatePickerField value={values.date} cartIds={cartIds} onChange={(date) => set("date", date)} />
+          </Suspense>
+          <FieldError message={errorFor("date")} />
+        </div>
       </div>
 
       <fieldset className="field-group">
@@ -331,24 +388,27 @@ function ReservationForm({
             )}
             <label className="field">
               <span>Da aula</span>
-              <select value={values.fromPeriodId} onChange={(event) => set("fromPeriodId", event.target.value)}>
-                {periods.map((period) => (
-                  <option key={period.id} value={period.id}>
-                    {period.name} ({period.startTime})
-                  </option>
-                ))}
+              <select value={values.fromPeriodId} onChange={(event) => selectFromPeriod(event.target.value)}>
+                {periods.map((period) => {
+                  const started = hasStarted(period, values.date, now);
+                  return (
+                    <option key={period.id} value={period.id} disabled={started}>
+                      {period.name} ({period.startTime}){started ? " (já passou)" : ""}
+                    </option>
+                  );
+                })}
               </select>
             </label>
             <label className="field">
               <span>Até a aula</span>
               <select value={values.toPeriodId} onChange={(event) => set("toPeriodId", event.target.value)}>
-                {periods.map((period) => (
-                  <option key={period.id} value={period.id}>
+                {periods.map((period, index) => (
+                  <option key={period.id} value={period.id} disabled={index < fromIndex}>
                     {period.name} (até {period.endTime})
                   </option>
                 ))}
               </select>
-              <FieldError message={errors.endTime} />
+              <FieldError message={errorFor("endTime")} />
             </label>
           </div>
         ) : (
@@ -362,8 +422,9 @@ function ReservationForm({
                 max={schedule.hours.closingTime}
                 value={values.startTime}
                 onChange={(event) => set("startTime", event.target.value)}
+                onBlur={() => touch("startTime")}
               />
-              <FieldError message={errors.startTime} />
+              <FieldError message={errorFor("startTime")} />
             </label>
             <label className="field">
               <span>Término</span>
@@ -374,8 +435,9 @@ function ReservationForm({
                 max={schedule.hours.closingTime}
                 value={values.endTime}
                 onChange={(event) => set("endTime", event.target.value)}
+                onBlur={() => touch("endTime")}
               />
-              <FieldError message={errors.endTime} />
+              <FieldError message={errorFor("endTime")} />
             </label>
           </div>
         )}
@@ -392,13 +454,21 @@ function ReservationForm({
         ) : (
           <div className="cart-options">
             {schedule.carts.map((cart) => {
-              const status = cartAvailabilityText(cart.id);
+              const status = cartSituation(
+                dayAvailability?.carts.find((entry) => entry.cartId === cart.id),
+                selectedTimes,
+              );
               return (
-                <label key={cart.id} className="cart-option" style={cartStyle(cart.color)}>
+                <label
+                  key={cart.id}
+                  className={status?.unavailable ? "cart-option is-unavailable" : "cart-option"}
+                  style={cartStyle(cart.color)}
+                >
                   <input
                     type="radio"
                     name="cartId"
                     value={cart.id}
+                    disabled={status?.unavailable && values.cartId !== cart.id}
                     checked={values.cartId === cart.id}
                     onChange={() => set("cartId", cart.id)}
                   />
@@ -407,20 +477,26 @@ function ReservationForm({
                     <span className="muted">
                       {plural(cart.equipment.available, "Chromebook disponível", "Chromebooks disponíveis")}
                     </span>
-                    {status && <span className={status.busy ? "cart-status is-busy" : "cart-status is-free"}>{status.text}</span>}
+                    {status && <span className={status.unavailable ? "cart-status is-busy" : "cart-status is-free"}>{status.text}</span>}
                   </span>
                 </label>
               );
             })}
           </div>
         )}
-        <FieldError message={errors.cartId} />
+        <FieldError message={errorFor("cartId")} />
       </fieldset>
 
       <label className="field">
         <span>Observação (opcional)</span>
-        <textarea rows={2} maxLength={500} value={values.notes} onChange={(event) => set("notes", event.target.value)} />
-        <FieldError message={errors.notes} />
+        <textarea
+          rows={2}
+          maxLength={500}
+          value={values.notes}
+          onChange={(event) => set("notes", event.target.value)}
+          onBlur={() => touch("notes")}
+        />
+        <FieldError message={errorFor("notes")} />
       </label>
 
       <div className="actions">
