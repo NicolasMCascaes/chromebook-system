@@ -18,6 +18,7 @@ import {
 import { ImpactConfirmation } from "../../features/admin/AffectedReservations";
 import { plural } from "../../lib/format";
 import { errorMessage } from "../../api/client";
+import { Modal } from "../../components/Modal";
 import { StatusMessage } from "../../components/StatusMessage";
 import { FieldError } from "../../components/FieldError";
 import { apiFieldErrors, zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
@@ -111,8 +112,7 @@ function ChromebookForm({
   }
 
   return (
-    <form className="card form" onSubmit={handleSubmit} noValidate>
-      <h2>{chromebook ? `Editar ${chromebook.assetTag}` : "Novo Chromebook"}</h2>
+    <form className="form" onSubmit={handleSubmit} noValidate>
       <div className="form-grid">
         <label className="field">
           <span>Identificação (patrimônio)</span>
@@ -245,14 +245,20 @@ export function ChromebooksPage() {
         <StatusMessage kind="info">Cadastre um carrinho antes de adicionar Chromebooks.</StatusMessage>
       )}
       {feedback && <StatusMessage kind="success">{feedback}</StatusMessage>}
-      {editing && carts.data && (
-        <ChromebookForm
-          key={editing === "new" ? "new" : editing.id}
-          chromebook={editing === "new" ? undefined : editing}
-          carts={carts.data}
-          onDone={finish}
-        />
-      )}
+      <Modal
+        open={editing !== null}
+        title={editing === "new" ? "Novo Chromebook" : editing ? `Editar ${editing.assetTag}` : ""}
+        onClose={() => setEditing(null)}
+      >
+        {editing && carts.data && (
+          <ChromebookForm
+            key={editing === "new" ? "new" : editing.id}
+            chromebook={editing === "new" ? undefined : editing}
+            carts={carts.data}
+            onDone={finish}
+          />
+        )}
+      </Modal>
 
       {chromebooks.isPending && <StatusMessage kind="loading">Carregando Chromebooks…</StatusMessage>}
       {chromebooks.isError && <StatusMessage kind="error">{errorMessage(chromebooks.error)}</StatusMessage>}
