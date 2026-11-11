@@ -127,7 +127,7 @@ describe("disponibilidade e agenda", () => {
     ]);
     expect(body.carts.map((cart) => cart.name)).toEqual(["Carrinho 1", "Carrinho 2"]);
     expect(body.reservations).toHaveLength(1);
-    expect(body.reservations[0]).toMatchObject({ cartId: cart1, teacherName: "Ana Souza", className: "7º A" });
+    expect(body.reservations[0]).toMatchObject({ cartId: cart1, teacherName: "Ana Souza", className: "7º ano" });
     expect(body.blocks).toMatchObject([{ kind: "HOLIDAY_NATIONAL", startDate: "2030-03-20" }]);
     expect(body.reservations[0]!.notes).toBeNull();
     expect(JSON.stringify(body)).not.toContain(professor.cancelToken);

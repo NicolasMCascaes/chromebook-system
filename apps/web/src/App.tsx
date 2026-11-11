@@ -5,6 +5,7 @@ import { PublicLayout } from "./components/PublicLayout";
 import { LoginPage } from "./pages/LoginPage";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { AgendaPage } from "./pages/AgendaPage";
+import { ApprovalPage } from "./pages/ApprovalPage";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { CartsPage } from "./pages/admin/CartsPage";
 import { ChromebooksPage } from "./pages/admin/ChromebooksPage";
@@ -18,6 +19,7 @@ export function App() {
     <Routes>
       <Route element={<PublicLayout />}>
         <Route index element={<AgendaPage />} />
+        <Route path="aprovacao" element={<ApprovalPage />} />
       </Route>
       <Route path="/admin/login" element={<LoginPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />

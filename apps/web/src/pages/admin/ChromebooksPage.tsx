@@ -5,9 +5,18 @@ import {
   chromebookInputSchema,
   type CartDto,
   type ChromebookDto,
+  type AdminReservationDto,
   type ChromebookStatus,
 } from "@chromebook/shared";
-import { useAdminCarts, useAdminChromebooks, useSaveChromebook, type ChromebookFilters } from "../../api/hooks";
+import {
+  useAdminCarts,
+  useAdminChromebooks,
+  useFetchCartUpcomingReservations,
+  useSaveChromebook,
+  type ChromebookFilters,
+} from "../../api/hooks";
+import { ImpactConfirmation } from "../../features/admin/AffectedReservations";
+import { plural } from "../../lib/format";
 import { errorMessage } from "../../api/client";
 import { StatusMessage } from "../../components/StatusMessage";
 import { FieldError } from "../../components/FieldError";
@@ -42,10 +51,33 @@ function ChromebookForm({
       : { assetTag: "", name: "", brandModel: "", cartId: carts[0]?.id ?? "", status: "AVAILABLE" },
   );
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [impact, setImpact] = useState<{ consequences: string[]; reservations: AdminReservationDto[] } | null>(null);
+  const [checking, setChecking] = useState(false);
   const save = useSaveChromebook();
+  const fetchUpcoming = useFetchCartUpcomingReservations();
 
-  const set = <K extends keyof ChromebookFormValues>(key: K, value: ChromebookFormValues[K]) =>
+  const set = <K extends keyof ChromebookFormValues>(key: K, value: ChromebookFormValues[K]) => {
+    setImpact(null);
     setValues((current) => ({ ...current, [key]: value }));
+  };
+
+  async function describeImpact(): Promise<{ consequences: string[]; reservations: AdminReservationDto[] } | null> {
+    if (!chromebook || chromebook.status !== "AVAILABLE") return null;
+    const leavesCart = values.cartId !== chromebook.cartId;
+    if (values.status === "AVAILABLE" && !leavesCart) return null;
+    const cart = carts.find((item) => item.id === chromebook.cartId);
+    const remaining = Math.max((cart?.equipment.available ?? 1) - 1, 0);
+    const reservations = await fetchUpcoming(chromebook.cartId);
+    const consequences = [
+      leavesCart
+        ? `${chromebook.assetTag} sai do ${cart?.name ?? "carrinho atual"}.`
+        : `${chromebook.assetTag} deixa de contar como disponível (${CHROMEBOOK_STATUS_LABELS[values.status].toLowerCase()}).`,
+      `O ${cart?.name ?? "carrinho"} fica com ${plural(remaining, "Chromebook disponível", "Chromebooks disponíveis")}.`,
+    ];
+    if (remaining === 0) consequences.push("O carrinho ficará sem nenhum equipamento disponível para as aulas já reservadas.");
+    if (reservations.length === 0 && remaining > 0) return null;
+    return { consequences, reservations };
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -55,6 +87,21 @@ function ChromebookForm({
       return;
     }
     setErrors({});
+    if (!impact) {
+      setChecking(true);
+      try {
+        const found = await describeImpact();
+        if (found) {
+          setImpact(found);
+          return;
+        }
+      } catch (error) {
+        setErrors(apiFieldErrors(error));
+        return;
+      } finally {
+        setChecking(false);
+      }
+    }
     try {
       await save.mutateAsync({ id: chromebook?.id, input: parsed.data });
       onDone(chromebook ? "Chromebook atualizado." : "Chromebook cadastrado.");
@@ -107,14 +154,26 @@ function ChromebookForm({
         </label>
       </div>
       {save.isError && <StatusMessage kind="error">{errorMessage(save.error)}</StatusMessage>}
-      <div className="actions">
-        <button type="button" className="button secondary" onClick={() => onDone("")}>
-          Cancelar
-        </button>
-        <button type="submit" className="button primary" disabled={save.isPending}>
-          {save.isPending ? "Salvando…" : "Salvar"}
-        </button>
-      </div>
+      {impact ? (
+        <ImpactConfirmation
+          title="Confira o impacto antes de salvar"
+          consequences={impact.consequences}
+          reservations={impact.reservations}
+          confirmLabel="Salvar mesmo assim"
+          busy={save.isPending}
+          onBack={() => setImpact(null)}
+          onConfirm={() => handleSubmit({ preventDefault() {} } as FormEvent)}
+        />
+      ) : (
+        <div className="actions">
+          <button type="button" className="button secondary" onClick={() => onDone("")}>
+            Cancelar
+          </button>
+          <button type="submit" className="button primary" disabled={save.isPending || checking}>
+            {save.isPending ? "Salvando…" : checking ? "Verificando reservas…" : "Salvar"}
+          </button>
+        </div>
+      )}
     </form>
   );
 }

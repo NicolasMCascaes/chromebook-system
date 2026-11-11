@@ -1,12 +1,12 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { z } from "zod";
-import { CALENDAR_BLOCK_KIND_LABELS, schoolNow, type ReservationDto, type reservationInputSchema } from "@chromebook/shared";
+import { CALENDAR_BLOCK_KIND_LABELS, isActiveReservationStatus, schoolNow, type ReservationDto, type reservationInputSchema } from "@chromebook/shared";
 import type { AppContainer } from "@/lib/container";
 import type { AuthUser } from "@/lib/auth/authenticate";
 import { AppError } from "@/lib/http/errors";
 import { isPgError, isRetryableTransactionError, PG_EXCLUSION_VIOLATION } from "@/lib/db/errors";
 import { getNotificationEmails, getSchoolHours } from "@/modules/settings/repository";
-import { enqueueReservationCreated } from "@/modules/notifications/repository";
+import { enqueueReservationNotification } from "@/modules/notifications/repository";
 import { findBlockingEntry } from "@/modules/blocks/repository";
 import { findCartForReservation } from "@/modules/carts/repository";
 import {
@@ -54,11 +54,23 @@ export function hashCancelToken(token: string): string {
   return sha256(`cancel:${token}`);
 }
 
-export function matchesCancelToken(view: ReservationView, token: string | undefined): boolean {
-  if (!token || !view.cancelTokenHash) return false;
-  const expected = Buffer.from(view.cancelTokenHash, "hex");
-  const received = Buffer.from(hashCancelToken(token), "hex");
+function matchesHash(storedHash: string | null, receivedHash: string): boolean {
+  if (!storedHash) return false;
+  const expected = Buffer.from(storedHash, "hex");
+  const received = Buffer.from(receivedHash, "hex");
   return expected.length === received.length && timingSafeEqual(expected, received);
+}
+
+export function matchesCancelToken(view: ReservationView, token: string | undefined): boolean {
+  return Boolean(token) && matchesHash(view.cancelTokenHash, hashCancelToken(token!));
+}
+
+export function hashApprovalToken(token: string): string {
+  return sha256(`approve:${token}`);
+}
+
+export function matchesApprovalToken(view: ReservationView, token: string | undefined): boolean {
+  return Boolean(token) && matchesHash(view.approvalTokenHash, hashApprovalToken(token!));
 }
 
 function replayOrReject(existing: ReservationView, hash: string): void {
@@ -88,6 +100,8 @@ export async function createReservation(
   }
 
   assertDateAndTimeRules(input, now);
+  const approvedByCreator = createdBy?.role === "ADMIN";
+  const approvalToken = approvedByCreator ? null : randomBytes(32).toString("base64url");
 
   const insertWithinTransaction = () =>
     db.transaction(async (tx) => {
@@ -119,9 +133,13 @@ export async function createReservation(
         idempotencyKey,
         requestHash: hash,
         cancelTokenHash: hashCancelToken(input.cancelToken),
+        status: approvedByCreator ? "CONFIRMED" : "PENDING",
+        approvalTokenHash: approvalToken ? hashApprovalToken(approvalToken) : null,
+        decidedBy: approvedByCreator ? createdBy!.id : null,
+        decidedAt: approvedByCreator ? clock.now() : null,
       });
-      if (insertedId) {
-        await enqueueReservationCreated(tx, insertedId, await getNotificationEmails(tx), {
+      if (insertedId && approvalToken) {
+        await enqueueReservationNotification(tx, insertedId, await getNotificationEmails(tx), {
           teacherName: input.teacherName,
           className: input.className,
           cartName: cart.name,
@@ -129,6 +147,7 @@ export async function createReservation(
           startTime: input.startTime,
           endTime: input.endTime,
           notes: input.notes,
+          approvalToken,
         });
       }
       return insertedId;
@@ -196,7 +215,7 @@ export async function cancelReservation(
     );
   }
 
-  if (view.status === "CANCELLED") return toReservationDto(view, audience, now);
+  if (!isActiveReservationStatus(view.status)) return toReservationDto(view, audience, now);
 
   if (!admin && !startsInFuture(view.reservationDate, view.startTime, now)) {
     throw ruleViolation("RESERVATION_STARTED", "Não é possível cancelar uma reserva que já começou ou terminou.");

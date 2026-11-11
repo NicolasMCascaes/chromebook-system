@@ -55,7 +55,7 @@ export function postReservation(actor: Teacher | TestUser, body: ReservationBody
       method: "POST",
       token: actor.token,
       headers,
-      body: { teacherName: actor.name, className: "7º A", date: NEXT_TUESDAY, cancelToken, ...body },
+      body: { teacherName: actor.name, className: "7º ano", date: NEXT_TUESDAY, cancelToken, ...body },
     }),
     params(),
   );

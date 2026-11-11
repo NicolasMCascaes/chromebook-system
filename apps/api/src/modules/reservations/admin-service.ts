@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import {
   CALENDAR_BLOCK_KIND_LABELS,
+  isActiveReservationStatus,
   normalizeTime,
   schoolNow,
   type AdminReservationDto,
@@ -39,8 +40,8 @@ export async function editReservation(
 
   const current = await findReservationView(db, id);
   if (!current) throw AppError.notFound("Reserva não encontrada.");
-  if (current.status !== "CONFIRMED") {
-    throw ruleViolation("RESERVATION_CANCELLED", "Reservas canceladas não podem ser alteradas.");
+  if (!isActiveReservationStatus(current.status)) {
+    throw ruleViolation("RESERVATION_CANCELLED", "Reservas canceladas ou recusadas não podem ser alteradas.");
   }
 
   const slot = {
@@ -94,7 +95,7 @@ export async function editReservation(
   for (let attempt = 1; ; attempt++) {
     try {
       const updated = await applyWithinTransaction();
-      if (!updated) throw ruleViolation("RESERVATION_CANCELLED", "Reservas canceladas não podem ser alteradas.");
+      if (!updated) throw ruleViolation("RESERVATION_CANCELLED", "Reservas canceladas ou recusadas não podem ser alteradas.");
       break;
     } catch (error) {
       if (isRetryableTransactionError(error) && attempt < MAX_TRANSACTION_ATTEMPTS) continue;

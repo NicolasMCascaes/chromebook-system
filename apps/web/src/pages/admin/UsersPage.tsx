@@ -65,9 +65,13 @@ function AuthorizeUserForm({ onDone }: { onDone: (message: string) => void }) {
 
 function UserRow({ user, isSelf, onError }: { user: UserDto; isSelf: boolean; onError: (message: string) => void }) {
   const update = useUpdateUser();
+  const [confirming, setConfirming] = useState(false);
 
   const change = (input: { active: boolean }) =>
-    update.mutate({ id: user.id, input }, { onError: (error) => onError(errorMessage(error)) });
+    update.mutate(
+      { id: user.id, input },
+      { onError: (error) => onError(errorMessage(error)), onSettled: () => setConfirming(false) },
+    );
 
   return (
     <tr className={user.active ? undefined : "row-inactive"}>
@@ -76,8 +80,24 @@ function UserRow({ user, isSelf, onError }: { user: UserDto; isSelf: boolean; on
       <td>{USER_ROLE_LABELS[user.role]}</td>
       <td>{user.active ? "Ativo" : "Desativado"}</td>
       <td>
-        {!isSelf && (
-          <button type="button" className="button link" disabled={update.isPending} onClick={() => change({ active: !user.active })}>
+        {!isSelf && confirming && (
+          <span className="inline-confirm">
+            <span>Desativar {user.name}? O acesso à área do TI é encerrado na hora.</span>
+            <button type="button" className="button link" disabled={update.isPending} onClick={() => setConfirming(false)}>
+              Voltar
+            </button>
+            <button type="button" className="button link danger-text" disabled={update.isPending} onClick={() => change({ active: false })}>
+              Confirmar
+            </button>
+          </span>
+        )}
+        {!isSelf && !confirming && (
+          <button
+            type="button"
+            className="button link"
+            disabled={update.isPending}
+            onClick={() => (user.active ? setConfirming(true) : change({ active: true }))}
+          >
             {user.active ? "Desativar" : "Reativar"}
           </button>
         )}

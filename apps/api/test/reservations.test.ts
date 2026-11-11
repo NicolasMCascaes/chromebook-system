@@ -61,11 +61,11 @@ describe("reservas", () => {
         cartId: cart1,
         cartName: "Carrinho 1",
         teacherName: "Ana Souza",
-        className: "7º A",
+        className: "7º ano",
         date: NEXT_TUESDAY,
         startTime: "08:00",
         endTime: "09:40",
-        status: "CONFIRMED",
+        status: "PENDING",
         notes: "Aula de pesquisa",
         canCancel: true,
       });
@@ -189,6 +189,13 @@ describe("reservas", () => {
       expect((await postReservation(professor, { cartId: cart1, date: "2030-02-30", startTime: "08:00", endTime: "09:00" })).status).toBe(422);
       expect((await postReservation(professor, { cartId: cart1, startTime: "8h", endTime: "09:00" })).status).toBe(422);
     });
+
+    it("aceita apenas as turmas cadastradas", async () => {
+      const response = await postReservation(professor, { cartId: cart1, className: "1º EM", startTime: "08:00", endTime: "09:00" });
+      expect(response.status).toBe(422);
+      expect(await response.json()).toMatchObject({ details: [{ path: "className", message: "Selecione a turma." }] });
+      expect((await postReservation(createTeacher(), { cartId: cart1, className: "5º B", startTime: "08:00", endTime: "09:00" })).status).toBe(201);
+    });
   });
 
   describe("bloqueios e carrinhos indisponíveis", () => {
@@ -264,7 +271,7 @@ describe("reservas", () => {
 
       expect((await cancelReservationRequest(otherProfessor, reservation.id)).status).toBe(403);
       const [stored] = await ctx.db.select().from(reservations).where(eq(reservations.id, reservation.id));
-      expect(stored!.status).toBe("CONFIRMED");
+      expect(stored!.status).toBe("PENDING");
     });
 
     it("com o código, não cancela reserva que já começou", async () => {

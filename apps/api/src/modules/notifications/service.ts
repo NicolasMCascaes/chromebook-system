@@ -30,10 +30,18 @@ function sanitizeError(error: unknown): string {
   return message.replace(/\s+/g, " ").slice(0, MAX_ERROR_LENGTH);
 }
 
-export function buildReservationCreatedEmail(notification: NotificationRow, appPublicUrl?: string): EmailMessage {
+export function approvalLink(appPublicUrl: string, reservationId: string, approvalToken: string): string {
+  const url = new URL("/aprovacao", appPublicUrl);
+  url.searchParams.set("reserva", reservationId);
+  url.searchParams.set("codigo", approvalToken);
+  return url.toString();
+}
+
+export function buildReservationEmail(notification: NotificationRow, appPublicUrl?: string): EmailMessage {
   const payload = notification.payload;
+  const isRequest = notification.type === "RESERVATION_REQUESTED";
   const lines = [
-    "Uma nova reserva de carrinho foi confirmada.",
+    isRequest ? "Um professor pediu um carrinho de Chromebooks. O pedido aguarda a sua aprovação." : "Uma nova reserva de carrinho foi confirmada.",
     "",
     `Professor: ${payload.teacherName}`,
     `Turma: ${payload.className}`,
@@ -42,10 +50,17 @@ export function buildReservationCreatedEmail(notification: NotificationRow, appP
     `Horário: ${payload.startTime} às ${payload.endTime}`,
   ];
   if (payload.notes) lines.push(`Observação: ${payload.notes}`);
-  if (appPublicUrl) lines.push("", `Agenda: ${appPublicUrl}`);
+  if (isRequest && appPublicUrl && payload.approvalToken) {
+    lines.push("", "Para aprovar ou recusar, abra:", approvalLink(appPublicUrl, notification.reservationId, payload.approvalToken));
+  } else if (isRequest) {
+    lines.push("", "Para aprovar ou recusar, acesse a área do TI em Reservas.");
+  } else if (appPublicUrl) {
+    lines.push("", `Agenda: ${appPublicUrl}`);
+  }
+  const when = `${payload.cartName} em ${formatDate(payload.date)} (${payload.startTime}–${payload.endTime})`;
   return {
     to: notification.recipient,
-    subject: `Nova reserva: ${payload.cartName} em ${formatDate(payload.date)} (${payload.startTime}–${payload.endTime})`,
+    subject: isRequest ? `Pedido de reserva: ${when}` : `Nova reserva: ${when}`,
     text: lines.join("\n"),
   };
 }
@@ -60,7 +75,7 @@ export async function dispatchPendingNotifications(container: AppContainer): Pro
   const result: DispatchResult = { sent: 0, failed: 0 };
   for (const notification of claimed) {
     try {
-      await emailSender.send(buildReservationCreatedEmail(notification, container.appPublicUrl));
+      await emailSender.send(buildReservationEmail(notification, container.appPublicUrl));
       await markNotificationSent(db, notification.id, clock.now());
       result.sent++;
     } catch (error) {

@@ -1,11 +1,11 @@
-import { normalizeTime, type AdminReservationDto, type ReservationDto, type SchoolNow } from "@chromebook/shared";
+import { isActiveReservationStatus, normalizeTime, type AdminReservationDto, type ReservationDto, type SchoolNow } from "@chromebook/shared";
 import type { ReservationView } from "./repository";
 import { startsInFuture } from "./rules";
 
 export type ReservationAudience = "public" | "owner" | "admin";
 
 export function canCancelReservation(view: ReservationView, audience: ReservationAudience, now: SchoolNow): boolean {
-  if (view.status !== "CONFIRMED") return false;
+  if (!isActiveReservationStatus(view.status)) return false;
   if (audience === "admin") return true;
   return startsInFuture(view.reservationDate, view.startTime, now);
 }
@@ -33,6 +33,8 @@ export function toAdminReservationDto(view: ReservationView, now: SchoolNow): Ad
     ...toReservationDto(view, "admin", now),
     cancelReason: view.cancelReason,
     cancelledAt: view.cancelledAt?.toISOString() ?? null,
+    decisionReason: view.decisionReason,
+    decidedAt: view.decidedAt?.toISOString() ?? null,
     updatedAt: view.updatedAt.toISOString(),
   };
 }

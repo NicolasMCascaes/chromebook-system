@@ -37,15 +37,24 @@ Copie os exemplos e preencha. Os arquivos `.env` e `.env.*` não são versionado
 
 Professores não fazem login. A agenda e as reservas exigem o código de acesso que vai no próprio link (`/?acesso=...`); sem ele, a página pede o link ao TI. O código é gerado pela migration e fica em **Administração do TI → Configurações**, onde o link pode ser copiado. "Gerar novo link" invalida o anterior na hora. O frontend guarda o código no navegador e retira o parâmetro da barra de endereço.
 
-## E-mail de novas reservas
+## Aprovação de reservas
 
-Cada reserva confirmada gera um e-mail para os endereços cadastrados em **Administração do TI → Configurações**. A mensagem é gravada na tabela `notification_outbox` na mesma transação da reserva e enviada logo após a resposta; se o envio falhar, a reserva continua confirmada e o e-mail é reenviado com espera crescente (até 5 tentativas).
+O pedido do professor nasce **aguardando aprovação** e já segura o horário, para que dois professores não peçam o mesmo carrinho. O TI decide de duas formas:
+
+- pelo link do e-mail (`/aprovacao?reserva=...&codigo=...`), sem login. O código é único por pedido; o banco guarda apenas o hash e o código é removido da fila de e-mails depois do envio;
+- em **Administração do TI → Reservas**, na seção "Pedidos aguardando aprovação". A aba mostra quantos pedidos estão pendentes.
+
+Recusar libera o horário e registra o motivo, que o professor vê ao abrir o pedido. A aprovação é recusada se, depois do pedido, a data foi bloqueada ou o carrinho desativado. Reservas criadas pelo TI logado já nascem aprovadas.
+
+## E-mail dos pedidos
+
+Cada pedido gera um e-mail com o link de aprovação para os endereços cadastrados em **Administração do TI → Configurações**. A mensagem é gravada na tabela `notification_outbox` na mesma transação da reserva e enviada logo após a resposta; se o envio falhar, o pedido continua registrado e o e-mail é reenviado com espera crescente (até 5 tentativas).
 
 | Variável | Uso |
 |---|---|
 | `EMAIL_PROVIDER` | `console` (padrão, apenas registra no log) ou `resend` |
 | `RESEND_API_KEY`, `EMAIL_FROM` | obrigatórias quando `EMAIL_PROVIDER=resend` |
-| `APP_PUBLIC_URL` | link da agenda incluído no e-mail (opcional) |
+| `APP_PUBLIC_URL` | endereço do frontend usado no link de aprovação; sem ela, o e-mail orienta a aprovar pela área do TI |
 | `CRON_SECRET` | protege `/api/internal/notifications/dispatch`, que reprocessa pendentes |
 
 `apps/api/vercel.json` agenda o reprocessamento uma vez por dia, o limite do plano Hobby. A Vercel envia `Authorization: Bearer <CRON_SECRET>` automaticamente. Em outro agendador, chame o endpoint com o mesmo cabeçalho.

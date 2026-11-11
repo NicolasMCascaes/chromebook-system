@@ -9,7 +9,7 @@ import {
   type schoolSettingsInputSchema,
 } from "@chromebook/shared";
 import type { AppContainer } from "@/lib/container";
-import { listUpcomingConfirmedReservations, type ReservationView } from "@/modules/reservations/repository";
+import { listUpcomingActiveReservations, type ReservationView } from "@/modules/reservations/repository";
 import { toAdminReservationDto } from "@/modules/reservations/mapper";
 import { startsInFuture } from "@/modules/reservations/rules";
 import {
@@ -57,7 +57,7 @@ export async function saveSchoolSettings(
 
   const settings = await getSchoolSettings(container);
   const now = schoolNow(container.clock.now());
-  const upcoming = await listUpcomingConfirmedReservations(container.db, { from: now.date });
+  const upcoming = await listUpcomingActiveReservations(container.db, { from: now.date });
   const affectedReservations = upcoming
     .filter((view) => startsInFuture(view.reservationDate, view.startTime, now) && !fitsSchoolHours(view, settings))
     .map((view) => toAdminReservationDto(view, now));

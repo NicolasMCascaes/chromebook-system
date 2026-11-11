@@ -605,3 +605,56 @@ tbody tr:last-child td {
 .schedule-header .field {
   flex: 1;
 }
+
+.approval-card {
+  max-width: 640px;
+  margin: 24px auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+.badge-pending {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.badge-rejected {
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
+}
+
+.tab-count {
+  display: inline-block;
+  min-width: 20px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.impact-confirmation {
+  padding: var(--space);
+  border: 1px solid var(--color-error-text);
+  border-radius: 8px;
+  background: var(--color-error-bg);
+}
+
+.impact-confirmation h3 {
+  margin: 0;
+}
+
+.impact-confirmation ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.inline-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

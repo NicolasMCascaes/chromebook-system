@@ -1,16 +1,16 @@
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import type { DbExecutor } from "@/lib/db/client";
-import { notificationOutbox, type NotificationRow, type ReservationCreatedPayload } from "@/lib/db/schema";
+import { notificationOutbox, type NotificationRow, type ReservationNotificationPayload } from "@/lib/db/schema";
 
-export async function enqueueReservationCreated(
+export async function enqueueReservationNotification(
   db: DbExecutor,
   reservationId: string,
   recipients: string[],
-  payload: ReservationCreatedPayload,
+  payload: ReservationNotificationPayload,
 ): Promise<void> {
   if (recipients.length === 0) return;
   await db.insert(notificationOutbox).values(
-    recipients.map((recipient) => ({ type: "RESERVATION_CREATED" as const, reservationId, recipient, payload })),
+    recipients.map((recipient) => ({ type: "RESERVATION_REQUESTED" as const, reservationId, recipient, payload })),
   );
 }
 
@@ -35,7 +35,7 @@ export async function claimDueNotifications(
 export async function markNotificationSent(db: DbExecutor, id: string, sentAt: Date): Promise<void> {
   await db
     .update(notificationOutbox)
-    .set({ status: "SENT", sentAt, lastError: null })
+    .set({ status: "SENT", sentAt, lastError: null, payload: sql`${notificationOutbox.payload} - 'approvalToken'` })
     .where(eq(notificationOutbox.id, id));
 }
 

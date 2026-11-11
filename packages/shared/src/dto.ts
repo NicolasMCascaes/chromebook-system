@@ -115,7 +115,7 @@ export interface CartAvailabilityDto {
   cartColor: string;
   availableEquipment: number;
   block: { kind: CalendarBlockKind; reason: string } | null;
-  busy: (TimeInterval & { reservationId: string; teacherName: string; className: string })[];
+  busy: (TimeInterval & { reservationId: string; teacherName: string; className: string; status: ReservationStatus })[];
   free: TimeInterval[];
 }
 
@@ -130,6 +130,8 @@ export interface AvailabilityDto {
 export interface AdminReservationDto extends ReservationDto {
   cancelReason: string | null;
   cancelledAt: string | null;
+  decisionReason: string | null;
+  decidedAt: string | null;
   updatedAt: string;
 }
 

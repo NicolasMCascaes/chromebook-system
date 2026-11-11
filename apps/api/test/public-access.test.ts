@@ -40,7 +40,7 @@ describe("link público protegido por código", () => {
         headers: { "idempotency-key": crypto.randomUUID() },
         body: {
           teacherName: "Ana",
-          className: "7º A",
+          className: "7º ano",
           cartId: cart1,
           date: NEXT_TUESDAY,
           startTime: "08:00",

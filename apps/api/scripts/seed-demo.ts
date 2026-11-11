@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { addDays, isWeekend, schoolNow } from "@chromebook/shared";
 import { createDatabase } from "../src/lib/db/client";
-import { calendarBlocks, carts, chromebooks, reservations, users } from "../src/lib/db/schema";
+import { calendarBlocks, carts, chromebooks, reservations, schoolSettings, users } from "../src/lib/db/schema";
 import { readServerEnv } from "../src/lib/env";
 
 const env = readServerEnv();
@@ -73,6 +73,7 @@ try {
     endTime: string,
     className: string,
     notes: string | null = null,
+    status: "PENDING" | "CONFIRMED" = "CONFIRMED",
   ) => ({
     cartId,
     teacherName,
@@ -83,18 +84,24 @@ try {
     notes,
     idempotencyKey: randomUUID(),
     requestHash: "seed",
+    status,
+    decidedBy: status === "CONFIRMED" ? admin.id : null,
+    decidedAt: status === "CONFIRMED" ? new Date() : null,
   });
 
   await db.insert(reservations).values([
-    booking(acer.id, "Ana Souza", 0, "07:20", "09:00", "7º A", "Pesquisa sobre biomas"),
+    booking(acer.id, "Ana Souza", 0, "07:20", "09:00", "7º ano", "Pesquisa sobre biomas"),
     booking(samsung.id, "Bruno Lima", 0, "10:10", "11:00", "8º B"),
-    booking(acer.id, "Carla Dias", 1, "07:20", "11:50", "9º A", "Simulado on-line"),
-    booking(samsung.id, "Bruno Lima", 1, "07:20", "11:50", "6º C"),
-    booking(acer.id, "Ana Souza", 2, "09:00", "09:50", "7º B"),
-    booking(samsung.id, "Carla Dias", 3, "08:10", "09:50", "1º EM"),
-    booking(acer.id, "Bruno Lima", 5, "10:10", "11:50", "8º A"),
-    booking(acer.id, "Ana Souza", -1, "08:10", "09:00", "7º A"),
+    booking(acer.id, "Carla Dias", 1, "07:20", "11:50", "9º ano", "Simulado on-line"),
+    booking(samsung.id, "Bruno Lima", 1, "07:20", "11:50", "6º B"),
+    booking(acer.id, "Ana Souza", 2, "09:00", "09:50", "7º ano"),
+    booking(samsung.id, "Carla Dias", 3, "08:10", "09:50", "9º ano"),
+    booking(acer.id, "Bruno Lima", 5, "10:10", "11:50", "8º A", null, "PENDING"),
+    booking(samsung.id, "Ana Souza", 2, "07:20", "08:10", "6º A", "Apresentação de trabalhos", "PENDING"),
+    booking(acer.id, "Ana Souza", -1, "08:10", "09:00", "7º ano"),
   ]);
+
+  await db.update(schoolSettings).set({ notificationEmails: ["ti@escola.demo"] });
 
   await db.insert(calendarBlocks).values([
     { kind: "HOLIDAY_MUNICIPAL", startDate: schoolDay(8), endDate: schoolDay(8), reason: "Aniversário da cidade", createdBy: admin.id },

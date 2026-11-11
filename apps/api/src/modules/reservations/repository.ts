@@ -1,7 +1,9 @@
-import { and, asc, eq, gte, ilike, lte, or, type SQL } from "drizzle-orm";
-import type { ReservationStatus } from "@chromebook/shared";
+import { and, asc, eq, gte, ilike, inArray, lte, or, type SQL } from "drizzle-orm";
+import { ACTIVE_RESERVATION_STATUSES, type ReservationStatus } from "@chromebook/shared";
 import type { DbExecutor } from "@/lib/db/client";
 import { carts, reservations, type ReservationRow } from "@/lib/db/schema";
+
+const isActive = inArray(reservations.status, [...ACTIVE_RESERVATION_STATUSES]);
 
 export type ReservationView = ReservationRow & { cartName: string; cartColor: string };
 
@@ -24,6 +26,10 @@ function selectReservationViews(db: DbExecutor) {
       cancelledAt: reservations.cancelledAt,
       cancelledBy: reservations.cancelledBy,
       cancelReason: reservations.cancelReason,
+      decidedAt: reservations.decidedAt,
+      decidedBy: reservations.decidedBy,
+      decisionReason: reservations.decisionReason,
+      approvalTokenHash: reservations.approvalTokenHash,
       createdAt: reservations.createdAt,
       updatedAt: reservations.updatedAt,
       cartName: carts.name,
@@ -47,12 +53,12 @@ export async function findReservationByIdempotencyKey(
   return row;
 }
 
-export async function listConfirmedReservations(
+export async function listActiveReservations(
   db: DbExecutor,
   range: { from: string; to: string; cartId?: string },
 ): Promise<ReservationView[]> {
   const conditions: SQL[] = [
-    eq(reservations.status, "CONFIRMED"),
+    isActive,
     gte(reservations.reservationDate, range.from),
     lte(reservations.reservationDate, range.to),
   ];
@@ -82,7 +88,7 @@ export async function markReservationCancelled(
   const rows = await db
     .update(reservations)
     .set({ status: "CANCELLED", ...cancellation })
-    .where(and(eq(reservations.id, id), eq(reservations.status, "CONFIRMED")))
+    .where(and(eq(reservations.id, id), isActive))
     .returning({ id: reservations.id });
   return rows.length > 0;
 }
@@ -110,11 +116,11 @@ export async function listReservationsForAdmin(
     .limit(ADMIN_LIST_LIMIT);
 }
 
-export async function listUpcomingConfirmedReservations(
+export async function listUpcomingActiveReservations(
   db: DbExecutor,
   filter: { from: string; to?: string; cartId?: string | null },
 ): Promise<ReservationView[]> {
-  const conditions: SQL[] = [eq(reservations.status, "CONFIRMED"), gte(reservations.reservationDate, filter.from)];
+  const conditions: SQL[] = [isActive, gte(reservations.reservationDate, filter.from)];
   if (filter.to) conditions.push(lte(reservations.reservationDate, filter.to));
   if (filter.cartId) conditions.push(eq(reservations.cartId, filter.cartId));
   return selectReservationViews(db)
@@ -130,7 +136,20 @@ export async function updateReservationFields(
   const rows = await db
     .update(reservations)
     .set(values)
-    .where(and(eq(reservations.id, id), eq(reservations.status, "CONFIRMED")))
+    .where(and(eq(reservations.id, id), isActive))
+    .returning({ id: reservations.id });
+  return rows.length > 0;
+}
+
+export async function markReservationDecision(
+  db: DbExecutor,
+  id: string,
+  decision: { status: "CONFIRMED" | "REJECTED"; decidedBy: string | null; decidedAt: Date; decisionReason: string | null },
+): Promise<boolean> {
+  const rows = await db
+    .update(reservations)
+    .set(decision)
+    .where(and(eq(reservations.id, id), eq(reservations.status, "PENDING")))
     .returning({ id: reservations.id });
   return rows.length > 0;
 }

@@ -1,8 +1,19 @@
 import type { z } from "zod";
-import type { CartDto, cartInputSchema, cartUpdateSchema } from "@chromebook/shared";
+import {
+  addDays,
+  MAX_ADMIN_RANGE_DAYS,
+  schoolNow,
+  type AdminReservationDto,
+  type CartDto,
+  type cartInputSchema,
+  type cartUpdateSchema,
+} from "@chromebook/shared";
 import type { AppContainer } from "@/lib/container";
 import { AppError } from "@/lib/http/errors";
 import { isPgError, PG_UNIQUE_VIOLATION } from "@/lib/db/errors";
+import { listUpcomingActiveReservations } from "@/modules/reservations/repository";
+import { toAdminReservationDto } from "@/modules/reservations/mapper";
+import { startsInFuture } from "@/modules/reservations/rules";
 import { findCartWithEquipment, insertCart, listCartsWithEquipment, toCartDto, updateCart } from "./repository";
 
 const DUPLICATE_NAME = "Já existe um carrinho com esse nome.";
@@ -44,4 +55,17 @@ export async function editCart(
   } catch (error) {
     rethrowDuplicateName(error);
   }
+}
+
+export async function listUpcomingCartReservations(container: AppContainer, id: string): Promise<AdminReservationDto[]> {
+  await getCart(container, id);
+  const now = schoolNow(container.clock.now());
+  const rows = await listUpcomingActiveReservations(container.db, {
+    from: now.date,
+    to: addDays(now.date, MAX_ADMIN_RANGE_DAYS),
+    cartId: id,
+  });
+  return rows
+    .filter((row) => startsInFuture(row.reservationDate, row.startTime, now))
+    .map((row) => toAdminReservationDto(row, now));
 }

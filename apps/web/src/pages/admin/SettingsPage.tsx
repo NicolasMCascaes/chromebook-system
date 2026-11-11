@@ -13,7 +13,7 @@ import { useAdminSettings, useRegenerateAccessCode, useSaveSettings } from "../.
 import { errorMessage } from "../../api/client";
 import { StatusMessage } from "../../components/StatusMessage";
 import { FieldError } from "../../components/FieldError";
-import { AffectedReservations } from "../../features/admin/AffectedReservations";
+import { AffectedReservations, ImpactConfirmation } from "../../features/admin/AffectedReservations";
 import { publicAgendaLink, rememberAccessCode } from "../../lib/access-code";
 import { apiFieldErrors, zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
 
@@ -107,6 +107,7 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
   const [closingTime, setClosingTime] = useState(settings.closingTime);
   const [slotMinutes, setSlotMinutes] = useState(settings.slotMinutes);
   const [emails, setEmails] = useState(settings.notificationEmails.join("\n"));
+  const [warnings, setWarnings] = useState<string[] | null>(null);
   const nextKey = useRef(1000);
   const [schedules, setSchedules] = useState<ScheduleRow[]>(() =>
     settings.schedules.map((schedule, scheduleIndex) => ({
@@ -154,7 +155,28 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
     setSchedules((current) => [...current, { key, name: "", periods: [] }]);
   }
 
-  async function handleSubmit(event: FormEvent) {
+  function describeRisks(input: { openingTime: string; closingTime: string; notificationEmails: string[]; schedules: { name: string; periods: unknown[] }[] }): string[] {
+    const risks: string[] = [];
+    if (input.notificationEmails.length === 0) {
+      risks.push("Nenhum e-mail cadastrado: os pedidos dos professores não serão avisados e só aparecerão na tela de Reservas.");
+    }
+    if (input.openingTime > settings.openingTime || input.closingTime < settings.closingTime) {
+      risks.push("O horário de funcionamento ficou menor. Reservas já feitas fora do novo horário continuam marcadas e serão listadas depois de salvar.");
+    }
+    const keptNames = new Set(input.schedules.map((schedule) => schedule.name.trim().toLowerCase()));
+    const removed = settings.schedules.filter((schedule) => !keptNames.has(schedule.name.trim().toLowerCase()));
+    if (removed.length > 0) {
+      risks.push(`Grade removida ou renomeada: ${removed.map((schedule) => schedule.name).join(", ")}. Os professores deixam de vê-la ao reservar por aula.`);
+    }
+    const removedPeriods = settings.schedules.reduce((total, schedule) => total + schedule.periods.length, 0) -
+      input.schedules.reduce((total, schedule) => total + schedule.periods.length, 0);
+    if (removedPeriods > 0) {
+      risks.push(`${removedPeriods === 1 ? "1 aula foi removida" : `${removedPeriods} aulas foram removidas`} das grades.`);
+    }
+    return risks;
+  }
+
+  async function handleSubmit(event: FormEvent, confirmed = false) {
     event.preventDefault();
     setAffected(null);
     const parsed = schoolSettingsInputSchema.safeParse({
@@ -175,6 +197,14 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
       return;
     }
     setErrors({});
+    if (!confirmed) {
+      const risks = describeRisks(parsed.data);
+      if (risks.length > 0) {
+        setWarnings(risks);
+        return;
+      }
+    }
+    setWarnings(null);
     try {
       const result = await save.mutateAsync(parsed.data);
       setAffected(result.affectedReservations);
@@ -306,9 +336,9 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
       </section>
 
       <section className="card form">
-        <h2>Aviso de novas reservas</h2>
+        <h2>Aviso de novos pedidos</h2>
         <label className="field">
-          <span>E-mails que recebem cada nova reserva (um por linha)</span>
+          <span>E-mails que recebem os pedidos para aprovar (um por linha)</span>
           <textarea value={emails} rows={3} onChange={(event) => setEmails(event.target.value)} />
           <FieldError message={errorAt("notificationEmails")} />
         </label>
@@ -321,11 +351,23 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
           <AffectedReservations reservations={affected} intro="Fora do novo horário," />
         </>
       )}
-      <div className="actions">
-        <button type="submit" className="button primary" disabled={save.isPending}>
-          {save.isPending ? "Salvando…" : "Salvar configurações"}
-        </button>
-      </div>
+      {warnings ? (
+        <ImpactConfirmation
+          title="Confira antes de salvar"
+          consequences={warnings}
+          reservations={[]}
+          confirmLabel="Salvar mesmo assim"
+          busy={save.isPending}
+          onBack={() => setWarnings(null)}
+          onConfirm={() => handleSubmit({ preventDefault() {} } as FormEvent, true)}
+        />
+      ) : (
+        <div className="actions">
+          <button type="submit" className="button primary" disabled={save.isPending}>
+            {save.isPending ? "Salvando…" : "Salvar configurações"}
+          </button>
+        </div>
+      )}
     </form>
   );
 }

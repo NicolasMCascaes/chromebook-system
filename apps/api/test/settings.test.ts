@@ -85,7 +85,7 @@ describe("configurações da escola", () => {
     const { affectedReservations } = (await (await save(validInput())).json()) as SchoolSettingsMutationDto;
     expect(affectedReservations.map((item) => item.id).sort()).toEqual([late.id, misaligned.id].sort());
     const [row] = await ctx.client<{ status: string }[]>`select status from app.reservations where id = ${late.id}`;
-    expect(row?.status).toBe("CONFIRMED");
+    expect(row?.status).toBe("PENDING");
   });
 
   it("valida horário, intervalo, aulas e e-mails", async () => {

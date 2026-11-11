@@ -171,6 +171,21 @@
   color: var(--color-primary);
 }
 
+.event-chip.is-pending {
+  border-left-style: dashed;
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--cart-color) var(--chip-tint), var(--color-surface)) 0 8px,
+    var(--color-surface) 8px 12px
+  );
+}
+
+.event-pending {
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--color-warning-text);
+}
+
 .event-chip.is-blocked {
   background: var(--hatch);
   cursor: default;
@@ -543,4 +558,9 @@
   .agenda-layout {
     grid-template-columns: 1fr;
   }
+}
+
+.legend-swatch.is-pending {
+  border: 1px dashed var(--color-muted);
+  background: repeating-linear-gradient(-45deg, var(--color-surface-muted) 0 4px, var(--color-surface) 4px 7px);
 }

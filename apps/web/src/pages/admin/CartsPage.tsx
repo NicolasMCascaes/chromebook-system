@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
-import { cartInputSchema, type CartDto } from "@chromebook/shared";
-import { useAdminCarts, useSaveCart } from "../../api/hooks";
+import { cartInputSchema, type AdminReservationDto, type CartDto } from "@chromebook/shared";
+import { useAdminCarts, useFetchCartUpcomingReservations, useSaveCart } from "../../api/hooks";
+import { ImpactConfirmation } from "../../features/admin/AffectedReservations";
 import { errorMessage } from "../../api/client";
 import { StatusMessage } from "../../components/StatusMessage";
 import { FieldError } from "../../components/FieldError";
@@ -29,10 +30,15 @@ function toFormValues(cart: CartDto): CartFormValues {
 function CartForm({ cart, onDone }: { cart?: CartDto; onDone: (message: string) => void }) {
   const [values, setValues] = useState<CartFormValues>(cart ? toFormValues(cart) : EMPTY_FORM);
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [impact, setImpact] = useState<AdminReservationDto[] | null>(null);
+  const [checking, setChecking] = useState(false);
   const save = useSaveCart();
+  const fetchUpcoming = useFetchCartUpcomingReservations();
 
-  const set = <K extends keyof CartFormValues>(key: K, value: CartFormValues[K]) =>
+  const set = <K extends keyof CartFormValues>(key: K, value: CartFormValues[K]) => {
+    setImpact(null);
     setValues((current) => ({ ...current, [key]: value }));
+  };
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -48,6 +54,17 @@ function CartForm({ cart, onDone }: { cart?: CartDto; onDone: (message: string) 
       return;
     }
     setErrors({});
+    if (cart?.active && !values.active && !impact) {
+      setChecking(true);
+      try {
+        setImpact(await fetchUpcoming(cart.id));
+      } catch (error) {
+        setErrors(apiFieldErrors(error));
+      } finally {
+        setChecking(false);
+      }
+      return;
+    }
     try {
       await save.mutateAsync({ id: cart?.id, input: parsed.data });
       onDone(cart ? "Carrinho atualizado." : "Carrinho cadastrado.");
@@ -92,14 +109,30 @@ function CartForm({ cart, onDone }: { cart?: CartDto; onDone: (message: string) 
         </label>
       </div>
       {save.isError && <StatusMessage kind="error">{errorMessage(save.error)}</StatusMessage>}
-      <div className="actions">
-        <button type="button" className="button secondary" onClick={() => onDone("")}>
-          Cancelar
-        </button>
-        <button type="submit" className="button primary" disabled={save.isPending}>
-          {save.isPending ? "Salvando…" : "Salvar"}
-        </button>
-      </div>
+      {impact ? (
+        <ImpactConfirmation
+          title={`Desativar ${cart?.name ?? "carrinho"}?`}
+          consequences={[
+            "O carrinho deixa de aparecer na agenda e não recebe novos pedidos.",
+            "Reservas já aprovadas continuam marcadas; pedidos aguardando não poderão ser aprovados.",
+            "Dá para reativar depois marcando \"Ativo\" de novo.",
+          ]}
+          reservations={impact}
+          confirmLabel="Desativar carrinho"
+          busy={save.isPending}
+          onBack={() => setImpact(null)}
+          onConfirm={() => handleSubmit({ preventDefault() {} } as FormEvent)}
+        />
+      ) : (
+        <div className="actions">
+          <button type="button" className="button secondary" onClick={() => onDone("")}>
+            Cancelar
+          </button>
+          <button type="submit" className="button primary" disabled={save.isPending || checking}>
+            {save.isPending ? "Salvando…" : checking ? "Verificando reservas…" : "Salvar"}
+          </button>
+        </div>
+      )}
     </form>
   );
 }

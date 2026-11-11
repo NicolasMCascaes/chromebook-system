@@ -50,6 +50,13 @@
       "when": 1763337600000,
       "tag": "0006_public_access_code",
       "breakpoints": false
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1763424000000,
+      "tag": "0007_reservation_approval",
+      "breakpoints": false
     }
   ]
 }

@@ -4,6 +4,7 @@ import {
   RESERVATION_STATUS_LABELS,
   RESERVATION_STATUSES,
   reservationUpdateSchema,
+  SCHOOL_CLASSES,
   schoolNow,
   type AdminReservationDto,
   type CartDto,
@@ -13,7 +14,9 @@ import {
   useAdminCancelReservation,
   useAdminCarts,
   useAdminReservations,
+  useDecideReservation,
   useEditReservation,
+  usePendingReservations,
   type AdminReservationFilters,
 } from "../../api/hooks";
 import { errorMessage } from "../../api/client";
@@ -22,12 +25,14 @@ import { StatusMessage } from "../../components/StatusMessage";
 import { FieldError } from "../../components/FieldError";
 import { apiFieldErrors, zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
 import { formatDateShort, formatTimeRange, plural } from "../../lib/format";
+import { DecisionPanel } from "../../features/admin/DecisionPanel";
+import { ReservationSummary } from "../../features/agenda/ReservationDialog";
 
 const DEFAULT_RANGE_DAYS = 30;
 
 function initialFilters(): AdminReservationFilters {
   const today = schoolNow(new Date()).date;
-  return { from: today, to: addDays(today, DEFAULT_RANGE_DAYS), status: "CONFIRMED" };
+  return { from: today, to: addDays(today, DEFAULT_RANGE_DAYS), status: undefined };
 }
 
 function EditReservationForm({
@@ -56,7 +61,10 @@ function EditReservationForm({
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const parsed = reservationUpdateSchema.safeParse(values);
+    const parsed = reservationUpdateSchema.safeParse({
+      ...values,
+      className: values.className === reservation.className ? undefined : values.className,
+    });
     if (!parsed.success) {
       setErrors(zodFieldErrors(parsed.error));
       return;
@@ -80,7 +88,16 @@ function EditReservationForm({
         </label>
         <label className="field">
           <span>Turma</span>
-          <input value={values.className} maxLength={60} onChange={(event) => set("className", event.target.value)} />
+          <select value={values.className} onChange={(event) => set("className", event.target.value)}>
+            {!(SCHOOL_CLASSES as readonly string[]).includes(reservation.className) && (
+              <option value={reservation.className}>{reservation.className}</option>
+            )}
+            {SCHOOL_CLASSES.map((schoolClass) => (
+              <option key={schoolClass} value={schoolClass}>
+                {schoolClass}
+              </option>
+            ))}
+          </select>
           <FieldError message={errors.className} />
         </label>
         <label className="field">
@@ -171,10 +188,105 @@ function CancelReservationForm({
   );
 }
 
+const STATUS_BADGES: Record<ReservationStatus, string> = {
+  PENDING: "badge badge-pending",
+  CONFIRMED: "badge badge-available",
+  REJECTED: "badge badge-rejected",
+  CANCELLED: "badge badge-inactive",
+};
+
+function DecideReservationForm({ reservation, onDone }: { reservation: AdminReservationDto; onDone: (message: string) => void }) {
+  const decide = useDecideReservation();
+  return (
+    <div className="stack">
+      <ReservationSummary
+        teacherName={reservation.teacherName}
+        className={reservation.className}
+        date={reservation.date}
+        startTime={reservation.startTime}
+        endTime={reservation.endTime}
+        cartName={reservation.cartName}
+        cartColor={reservation.cartColor}
+        notes={reservation.notes}
+        periodsLabel={null}
+      />
+      <DecisionPanel
+        busy={decide.isPending}
+        error={decide.isError ? errorMessage(decide.error) : null}
+        onBack={() => onDone("")}
+        onDecide={(input) =>
+          decide.mutate(
+            { id: reservation.id, input },
+            {
+              onSuccess: (result) =>
+                onDone(
+                  result.status === "CONFIRMED"
+                    ? `Reserva de ${result.teacherName} aprovada.`
+                    : `Pedido de ${result.teacherName} recusado. O horário foi liberado.`,
+                ),
+            },
+          )
+        }
+      />
+    </div>
+  );
+}
+
+function PendingRequests({ onDecide }: { onDecide: (reservation: AdminReservationDto) => void }) {
+  const pending = usePendingReservations();
+  if (pending.isPending) return null;
+  if (pending.isError) return <StatusMessage kind="error">{errorMessage(pending.error)}</StatusMessage>;
+  return (
+    <section className="card stack" aria-labelledby="pending-title">
+      <h2 id="pending-title">Pedidos aguardando aprovação</h2>
+      {pending.data.length === 0 ? (
+        <p className="muted">Nenhum pedido aguardando. Novos pedidos chegam por e-mail e aparecem aqui.</p>
+      ) : (
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Horário</th>
+                <th>Carrinho</th>
+                <th>Professor</th>
+                <th>Turma</th>
+                <th aria-label="Ações" />
+              </tr>
+            </thead>
+            <tbody>
+              {pending.data.map((reservation) => (
+                <tr key={reservation.id}>
+                  <td>{formatDateShort(reservation.date)}</td>
+                  <td>{formatTimeRange(reservation.startTime, reservation.endTime)}</td>
+                  <td>
+                    <span className="swatch" style={{ backgroundColor: reservation.cartColor }} aria-hidden="true" />{" "}
+                    {reservation.cartName}
+                  </td>
+                  <td>{reservation.teacherName}</td>
+                  <td>
+                    {reservation.className}
+                    {reservation.notes && <div className="muted small-text">{reservation.notes}</div>}
+                  </td>
+                  <td className="row-actions">
+                    <button type="button" className="button primary small" onClick={() => onDecide(reservation)}>
+                      Analisar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function ReservationsPage() {
   const [filters, setFilters] = useState<AdminReservationFilters>(initialFilters);
   const [search, setSearch] = useState("");
-  const [action, setAction] = useState<{ type: "edit" | "cancel"; reservation: AdminReservationDto } | null>(null);
+  const [action, setAction] = useState<{ type: "edit" | "cancel" | "decide"; reservation: AdminReservationDto } | null>(null);
   const [feedback, setFeedback] = useState("");
   const reservations = useAdminReservations(filters);
   const carts = useAdminCarts();
@@ -188,6 +300,14 @@ export function ReservationsPage() {
 
   return (
     <div className="stack">
+      {feedback && <StatusMessage kind="success">{feedback}</StatusMessage>}
+      <PendingRequests
+        onDecide={(reservation) => {
+          setFeedback("");
+          setAction({ type: "decide", reservation });
+        }}
+      />
+      <h2>Todas as reservas</h2>
       <form
         className="filters"
         onSubmit={(event) => {
@@ -237,7 +357,6 @@ export function ReservationsPage() {
         </button>
       </form>
 
-      {feedback && <StatusMessage kind="success">{feedback}</StatusMessage>}
       {reservations.isPending && <StatusMessage kind="loading">Carregando reservas…</StatusMessage>}
       {reservations.isError && <StatusMessage kind="error">{errorMessage(reservations.error)}</StatusMessage>}
       {reservations.data?.length === 0 && <StatusMessage kind="empty">Nenhuma reserva encontrada nesse período.</StatusMessage>}
@@ -260,7 +379,7 @@ export function ReservationsPage() {
               </thead>
               <tbody>
                 {reservations.data.map((reservation) => (
-                  <tr key={reservation.id} className={reservation.status === "CANCELLED" ? "row-inactive" : undefined}>
+                  <tr key={reservation.id} className={reservation.status === "CANCELLED" || reservation.status === "REJECTED" ? "row-inactive" : undefined}>
                     <td>{formatDateShort(reservation.date)}</td>
                     <td>{formatTimeRange(reservation.startTime, reservation.endTime)}</td>
                     <td>
@@ -273,13 +392,25 @@ export function ReservationsPage() {
                       {reservation.notes && <div className="muted small-text">{reservation.notes}</div>}
                     </td>
                     <td>
-                      <span className={reservation.status === "CONFIRMED" ? "badge badge-available" : "badge badge-inactive"}>
-                        {RESERVATION_STATUS_LABELS[reservation.status]}
-                      </span>
-                      {reservation.cancelReason && <div className="muted small-text">{reservation.cancelReason}</div>}
+                      <span className={STATUS_BADGES[reservation.status]}>{RESERVATION_STATUS_LABELS[reservation.status]}</span>
+                      {(reservation.cancelReason ?? reservation.decisionReason) && (
+                        <div className="muted small-text">{reservation.cancelReason ?? reservation.decisionReason}</div>
+                      )}
                     </td>
                     <td className="row-actions">
-                      {reservation.status === "CONFIRMED" && (
+                      {reservation.status === "PENDING" && (
+                        <button
+                          type="button"
+                          className="button link"
+                          onClick={() => {
+                            setFeedback("");
+                            setAction({ type: "decide", reservation });
+                          }}
+                        >
+                          Analisar
+                        </button>
+                      )}
+                      {(reservation.status === "CONFIRMED" || reservation.status === "PENDING") && (
                         <>
                           <button
                             type="button"
@@ -314,11 +445,14 @@ export function ReservationsPage() {
 
       <Modal
         open={action !== null}
-        title={action?.type === "cancel" ? "Cancelar reserva" : "Editar reserva"}
+        title={action?.type === "cancel" ? "Cancelar reserva" : action?.type === "decide" ? "Pedido de reserva" : "Editar reserva"}
         onClose={() => setAction(null)}
       >
         {action?.type === "edit" && carts.data && (
           <EditReservationForm key={action.reservation.id} reservation={action.reservation} carts={carts.data} onDone={finish} />
+        )}
+        {action?.type === "decide" && (
+          <DecideReservationForm key={action.reservation.id} reservation={action.reservation} onDone={finish} />
         )}
         {action?.type === "cancel" && (
           <CancelReservationForm key={action.reservation.id} reservation={action.reservation} onDone={finish} />

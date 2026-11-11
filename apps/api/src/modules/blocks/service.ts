@@ -3,7 +3,7 @@ import { schoolNow, type AdminReservationDto, type BlockDto, type BlockMutationD
 import type { AppContainer } from "@/lib/container";
 import type { AuthUser } from "@/lib/auth/authenticate";
 import { AppError } from "@/lib/http/errors";
-import { listUpcomingConfirmedReservations } from "@/modules/reservations/repository";
+import { listUpcomingActiveReservations } from "@/modules/reservations/repository";
 import { toAdminReservationDto } from "@/modules/reservations/mapper";
 import { startsInFuture } from "@/modules/reservations/rules";
 import { findCartForReservation } from "@/modules/carts/repository";
@@ -20,7 +20,7 @@ export async function findAffectedReservations(container: AppContainer, input: B
   const now = schoolNow(container.clock.now());
   const from = input.startDate > now.date ? input.startDate : now.date;
   if (from > input.endDate) return [];
-  const rows = await listUpcomingConfirmedReservations(container.db, { from, to: input.endDate, cartId: input.cartId });
+  const rows = await listUpcomingActiveReservations(container.db, { from, to: input.endDate, cartId: input.cartId });
   return rows
     .filter((row) => startsInFuture(row.reservationDate, row.startTime, now))
     .map((row) => toAdminReservationDto(row, now));

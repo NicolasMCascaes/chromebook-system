@@ -3,6 +3,7 @@ import {
   CALENDAR_BLOCK_KINDS,
   CHROMEBOOK_STATUSES,
   MAX_ADMIN_RANGE_DAYS,
+  SCHOOL_CLASSES,
   MAX_CALENDAR_RANGE_DAYS,
   MAX_CLASS_PERIODS,
   MAX_CLASS_SCHEDULES,
@@ -127,11 +128,13 @@ export const CANCEL_TOKEN_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 
 const cancelToken = z.string().regex(CANCEL_TOKEN_PATTERN, "Código de cancelamento inválido.");
 
+const schoolClass = z.enum(SCHOOL_CLASSES, { error: "Selecione a turma." });
+
 export const reservationInputSchema = z
   .object({
     teacherName: requiredText("Nome do professor", 100),
     cartId: z.uuid("Selecione um carrinho."),
-    className: requiredText("Turma", 60),
+    className: schoolClass,
     date: isoDate,
     startTime: clockTime("Horário de início"),
     endTime: clockTime("Horário de término"),
@@ -190,7 +193,7 @@ export const adminReservationQuerySchema = z
 export const reservationUpdateSchema = z
   .object({
     teacherName: requiredText("Nome do professor", 100).optional(),
-    className: requiredText("Turma", 60).optional(),
+    className: schoolClass.optional(),
     cartId: z.uuid("Selecione um carrinho.").optional(),
     date: isoDate.optional(),
     startTime: clockTime("Horário de início").optional(),
@@ -300,3 +303,12 @@ export const schoolSettingsInputSchema = z
 export type SchoolSettingsInput = z.input<typeof schoolSettingsInputSchema>;
 
 export const ACCESS_CODE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
+
+export const APPROVAL_TOKEN_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
+
+export const reservationDecisionSchema = z.object({
+  decision: z.enum(["APPROVE", "REJECT"], { error: "Decisão inválida." }),
+  reason: optionalText("Motivo", 300).optional().default(null),
+  approvalToken: z.string().regex(APPROVAL_TOKEN_PATTERN, "Link de aprovação inválido.").optional(),
+});
+export type ReservationDecisionInput = z.input<typeof reservationDecisionSchema>;

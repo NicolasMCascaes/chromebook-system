@@ -79,7 +79,7 @@ describe("bloqueios e feriados", () => {
     const affected = await reserve(cart1, NEXT_TUESDAY, "08:00", "09:00");
     await post({ kind: "SCHOOL_RECESS", startDate: NEXT_TUESDAY, endDate: NEXT_TUESDAY, reason: "Recesso" });
     const [row] = await ctx.client<{ status: string }[]>`select status from app.reservations where id = ${affected.id}`;
-    expect(row?.status).toBe("CONFIRMED");
+    expect(row?.status).toBe("PENDING");
   });
 
   it("edita e exclui bloqueio", async () => {

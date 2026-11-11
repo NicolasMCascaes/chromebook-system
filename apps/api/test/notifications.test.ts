@@ -55,10 +55,10 @@ describe("e-mail de nova reserva", () => {
     expect((await outbox()).map((row) => row.status)).toEqual(["SENT", "SENT"]);
     expect(ctx.emailSender.sent.map((message) => message.to).sort()).toEqual(["coord@escola.test", "direcao@escola.test"]);
     const [message] = ctx.emailSender.sent;
-    expect(message?.subject).toBe("Nova reserva: Carrinho 1 em 05/03/2030 (08:00–09:00)");
+    expect(message?.subject).toBe("Pedido de reserva: Carrinho 1 em 05/03/2030 (08:00–09:00)");
     expect(message?.text).toContain("Professor: Ana Souza");
     expect(message?.text).toContain("Observação: Pesquisa");
-    expect(message?.text).toContain("Agenda: http://escola.test");
+    expect(message?.text).toMatch(/http:\/\/escola\.test\/aprovacao\?reserva=[0-9a-f-]+&codigo=[A-Za-z0-9_-]{43}/);
   });
 
   it("não enfileira de novo quando a mesma requisição é repetida", async () => {
@@ -84,7 +84,7 @@ describe("e-mail de nova reserva", () => {
     expect(new Date(first!.next_attempt_at).getTime()).toBe(ctx.clock.now().getTime() + 2 * 60_000);
 
     const [reservation] = await ctx.client<{ status: string }[]>`select status from app.reservations`;
-    expect(reservation?.status).toBe("CONFIRMED");
+    expect(reservation?.status).toBe("PENDING");
 
     expect(await (await dispatch()).json()).toEqual({ sent: 0, failed: 0 });
 

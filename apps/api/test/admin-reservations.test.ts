@@ -58,7 +58,7 @@ describe("reservas na área do TI", () => {
       expect(response.status).toBe(200);
       const body = (await response.json()) as AdminReservationDto[];
       expect(body).toHaveLength(2);
-      expect(body.find((item) => item.id === kept.id)).toMatchObject({ notes: "Projeto", status: "CONFIRMED" });
+      expect(body.find((item) => item.id === kept.id)).toMatchObject({ notes: "Projeto", status: "PENDING" });
       expect(body.find((item) => item.id === cancelled.id)).toMatchObject({
         status: "CANCELLED",
         cancelReason: "Turma em passeio",
@@ -76,10 +76,10 @@ describe("reservas na área do TI", () => {
           (item) => `${item.teacherName}/${item.status}`,
         );
 
-      expect(await names("status=CONFIRMED")).toEqual(["Ana Souza/CONFIRMED", "Bruno Lima/CONFIRMED"]);
-      expect(await names(`cartId=${cart2}`)).toEqual(["Bruno Lima/CONFIRMED", "Ana Souza/CANCELLED"]);
-      expect(await names("search=bruno")).toEqual(["Bruno Lima/CONFIRMED"]);
-      expect(await names("search=8º")).toEqual(["Ana Souza/CONFIRMED"]);
+      expect(await names("status=PENDING")).toEqual(["Ana Souza/PENDING", "Bruno Lima/PENDING"]);
+      expect(await names(`cartId=${cart2}`)).toEqual(["Bruno Lima/PENDING", "Ana Souza/CANCELLED"]);
+      expect(await names("search=bruno")).toEqual(["Bruno Lima/PENDING"]);
+      expect(await names("search=8º")).toEqual(["Ana Souza/PENDING"]);
       expect(await names("search=%25")).toEqual([]);
     });
 
@@ -122,9 +122,9 @@ describe("reservas na área do TI", () => {
   describe("edição", () => {
     it("corrige nome, turma e observação", async () => {
       const reservation = await create(professor, { cartId: cart1, startTime: "08:00", endTime: "09:00" });
-      const response = await edit(reservation.id, { teacherName: "Ana Paula Souza", className: "9º C", notes: null });
+      const response = await edit(reservation.id, { teacherName: "Ana Paula Souza", className: "9º ano", notes: null });
       expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ teacherName: "Ana Paula Souza", className: "9º C", notes: null });
+      expect(await response.json()).toMatchObject({ teacherName: "Ana Paula Souza", className: "9º ano", notes: null });
     });
 
     it("remarca para outro horário e carrinho, liberando o horário anterior", async () => {

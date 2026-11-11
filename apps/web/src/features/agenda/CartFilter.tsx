@@ -41,6 +41,10 @@ export function ScheduleLegend() {
           Bloqueado: feriado, recesso ou data indisponível
         </li>
         <li>
+          <span className="legend-swatch is-pending" aria-hidden="true" />
+          Tracejado: pedido aguardando aprovação do TI
+        </li>
+        <li>
           <span className="day-status is-empty">Sem reservas</span>
           todos os carrinhos livres
         </li>

@@ -38,7 +38,7 @@ describe("concorrência e restrição no banco", () => {
 
     const statuses = responses.map((response) => response.status).sort();
     expect(statuses).toEqual([201, ...Array<number>(CONCURRENT_REQUESTS - 1).fill(409)]);
-    expect(await ctx.db.select().from(reservations).where(eq(reservations.status, "CONFIRMED"))).toHaveLength(1);
+    expect(await ctx.db.select().from(reservations).where(eq(reservations.status, "PENDING"))).toHaveLength(1);
   });
 
   it("reservas simultâneas em carrinhos diferentes são todas confirmadas", async () => {

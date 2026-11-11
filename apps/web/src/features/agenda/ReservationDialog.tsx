@@ -6,6 +6,7 @@ import {
   type ReservationDto,
   type ReservationInput,
 } from "@chromebook/shared";
+import { SCHOOL_CLASSES } from "@chromebook/shared";
 import { useAvailability, useCreateReservation } from "../../api/hooks";
 import { ApiError, errorMessage } from "../../api/client";
 import { Modal } from "../../components/Modal";
@@ -165,7 +166,13 @@ function ReservationForm({
     const reservation = step.reservation;
     return (
       <div className="reservation-done">
-        <StatusMessage kind="success">Reserva confirmada.</StatusMessage>
+        {reservation.status === "PENDING" ? (
+          <StatusMessage kind="success">
+            Pedido enviado. O horário fica separado para você enquanto o TI analisa; acompanhe a aprovação pela agenda.
+          </StatusMessage>
+        ) : (
+          <StatusMessage kind="success">Reserva confirmada.</StatusMessage>
+        )}
         <p className="muted small-text">
           Se precisar cancelar, abra a reserva na agenda usando este mesmo navegador. Em outro aparelho, peça o
           cancelamento ao TI.
@@ -194,7 +201,7 @@ function ReservationForm({
     const cart = schedule.carts.find((entry) => entry.id === step.input.cartId);
     return (
       <div className="reservation-review">
-        <p className="muted">Confira os dados antes de confirmar.</p>
+        <p className="muted">Confira os dados antes de enviar. O pedido passa pela aprovação do TI.</p>
         <ReservationSummary
           teacherName={step.input.teacherName}
           className={step.input.className}
@@ -228,7 +235,7 @@ function ReservationForm({
             disabled={create.isPending}
             onClick={() => void handleConfirm(step.input, step.idempotencyKey)}
           >
-            {create.isPending ? "Confirmando…" : "Confirmar reserva"}
+            {create.isPending ? "Enviando…" : "Enviar pedido"}
           </button>
         </div>
       </div>
@@ -253,13 +260,20 @@ function ReservationForm({
         </label>
         <label className="field">
           <span>Turma</span>
-          <input
+          <select
             value={values.className}
             autoFocus={Boolean(values.teacherName)}
-            maxLength={60}
-            placeholder="Ex.: 7º A"
             onChange={(event) => set("className", event.target.value)}
-          />
+          >
+            <option value="" disabled>
+              Selecione a turma
+            </option>
+            {SCHOOL_CLASSES.map((schoolClass) => (
+              <option key={schoolClass} value={schoolClass}>
+                {schoolClass}
+              </option>
+            ))}
+          </select>
           <FieldError message={errors.className} />
         </label>
         <label className="field">

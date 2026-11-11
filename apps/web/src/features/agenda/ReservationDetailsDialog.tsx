@@ -25,12 +25,19 @@ function ReservationDetails({ reservationId, schedules, onClose }: { reservation
   if (reservation.isError) return <StatusMessage kind="error">{errorMessage(reservation.error)}</StatusMessage>;
 
   const data = reservation.data;
-  const cancelled = data.status === "CANCELLED";
+  const cancelled = data.status === "CANCELLED" || data.status === "REJECTED";
   const canCancel = data.canCancel && cancelToken !== undefined;
 
   return (
     <div className="stack">
-      {cancelled && <StatusMessage kind="info">Esta reserva foi cancelada e o horário está liberado.</StatusMessage>}
+      {data.status === "PENDING" && (
+        <StatusMessage kind="info">Pedido aguardando aprovação do TI. O horário fica separado até a decisão.</StatusMessage>
+      )}
+      {data.status === "CONFIRMED" && <StatusMessage kind="success">Reserva aprovada pelo TI.</StatusMessage>}
+      {data.status === "REJECTED" && (
+        <StatusMessage kind="error">Pedido recusado pelo TI. O horário foi liberado.</StatusMessage>
+      )}
+      {data.status === "CANCELLED" && <StatusMessage kind="info">Esta reserva foi cancelada e o horário está liberado.</StatusMessage>}
       <ReservationSummary
         teacherName={data.teacherName}
         className={data.className}

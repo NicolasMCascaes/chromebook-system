@@ -15,6 +15,7 @@ import type {
   ChromebookUpdate,
   MeDto,
   ReservationDto,
+  ReservationDecisionInput,
   ReservationInput,
   ReservationStatus,
   ReservationUpdate,
@@ -25,6 +26,7 @@ import type {
   UserInput,
   UserUpdate,
 } from "@chromebook/shared";
+import { addDays, MAX_ADMIN_RANGE_DAYS, schoolNow } from "@chromebook/shared";
 import { apiFetch } from "./client";
 
 export const queryKeys = {
@@ -216,6 +218,17 @@ export function useAdminReservations(filters: AdminReservationFilters) {
   });
 }
 
+export function usePendingReservations() {
+  const today = schoolNow(new Date()).date;
+  const filters: AdminReservationFilters = { from: today, to: addDays(today, MAX_ADMIN_RANGE_DAYS), status: "PENDING" };
+  return useQuery({
+    queryKey: queryKeys.adminReservations(filters),
+    queryFn: () =>
+      apiFetch<AdminReservationDto[]>(`/api/admin/reservations?${new URLSearchParams({ ...filters, status: "PENDING" }).toString()}`),
+    refetchInterval: 60_000,
+  });
+}
+
 export function useEditReservation() {
   const invalidate = useInvalidateReservations();
   return useMutation({
@@ -299,4 +312,42 @@ export function useRegenerateAccessCode() {
     mutationFn: () => apiFetch<SchoolSettingsDto>("/api/admin/settings/access-code", { method: "POST" }),
     onSuccess: (settings) => queryClient.setQueryData(queryKeys.adminSettings, settings),
   });
+}
+
+export function useDecideReservation() {
+  const invalidate = useInvalidateReservations();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: ReservationDecisionInput }) =>
+      apiFetch<AdminReservationDto>(`/api/admin/reservations/${id}/decision`, { method: "POST", body: input }),
+    onSettled: invalidate,
+  });
+}
+
+export function useApprovalRequest(id: string, approvalToken: string) {
+  return useQuery({
+    queryKey: ["approval", id, approvalToken],
+    queryFn: () =>
+      apiFetch<AdminReservationDto>(`/api/approvals/${id}`, { headers: { "X-Approval-Token": approvalToken } }),
+    retry: false,
+  });
+}
+
+export function useDecideByLink() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: ReservationDecisionInput }) =>
+      apiFetch<AdminReservationDto>(`/api/approvals/${id}`, { method: "POST", body: input }),
+    onSuccess: (reservation, { id, input }) =>
+      queryClient.setQueryData(["approval", id, input.approvalToken], reservation),
+  });
+}
+
+export function useFetchCartUpcomingReservations() {
+  const queryClient = useQueryClient();
+  return (cartId: string) =>
+    queryClient.fetchQuery({
+      queryKey: ["admin", "reservations", "cart-upcoming", cartId],
+      queryFn: () => apiFetch<AdminReservationDto[]>(`/api/admin/carts/${cartId}/upcoming-reservations`),
+      staleTime: 0,
+    });
 }

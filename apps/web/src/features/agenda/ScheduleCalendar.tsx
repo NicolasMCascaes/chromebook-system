@@ -105,9 +105,11 @@ function EventContent({ info }: { info: EventDisplayInfo }) {
     );
   }
   const reservation = kind.reservation;
-  const label = `${reservation.startTime} às ${reservation.endTime}, ${reservation.teacherName}, ${reservation.className}, ${reservation.cartName}`;
+  const pending = reservation.status === "PENDING";
+  const label = `${reservation.startTime} às ${reservation.endTime}, ${reservation.teacherName}, ${reservation.className}, ${reservation.cartName}${pending ? ", aguardando aprovação" : ""}`;
+  const chipClass = ["event-chip", kind.isMine ? "is-own" : "", pending ? "is-pending" : ""].filter(Boolean).join(" ");
   return (
-    <span className={kind.isMine ? "event-chip is-own" : "event-chip"} style={cartStyle(reservation.cartColor)} title={label}>
+    <span className={chipClass} style={cartStyle(reservation.cartColor)} title={label}>
       <span className="event-line">
         <span className="event-time">
           {reservation.startTime}–{reservation.endTime}
@@ -119,6 +121,7 @@ function EventContent({ info }: { info: EventDisplayInfo }) {
         {kind.isMine && <span className="event-own-tag"> (sua)</span>}
       </span>
       <span className="event-line event-meta">{reservation.className}</span>
+      {pending && <span className="event-line event-pending">Aguardando aprovação</span>}
     </span>
   );
 }

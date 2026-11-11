@@ -13,7 +13,7 @@ import type { AppContainer } from "@/lib/container";
 import { getSchoolHours, listClassSchedules } from "@/modules/settings/repository";
 import { listBlocksInRange, toCalendarBlockDto } from "@/modules/blocks/repository";
 import { listCarts } from "@/modules/carts/service";
-import { listConfirmedReservations } from "@/modules/reservations/repository";
+import { listActiveReservations } from "@/modules/reservations/repository";
 import { toReservationDto, type ReservationAudience } from "@/modules/reservations/mapper";
 
 export async function getCalendar(
@@ -26,7 +26,7 @@ export async function getCalendar(
     getSchoolHours(container.db),
     listClassSchedules(container.db),
     listCarts(container, { onlyActive: true }),
-    listConfirmedReservations(container.db, query),
+    listActiveReservations(container.db, query),
     listBlocksInRange(container.db, query),
   ]);
   return {
@@ -49,7 +49,7 @@ export async function getAvailability(
   const [hours, allCarts, reservations, blocks] = await Promise.all([
     getSchoolHours(container.db),
     listCarts(container, { onlyActive: true }),
-    listConfirmedReservations(container.db, range),
+    listActiveReservations(container.db, range),
     listBlocksInRange(container.db, range),
   ]);
 
@@ -78,6 +78,7 @@ export async function getAvailability(
         reservationId: reservation.id,
         teacherName: reservation.teacherName,
         className: reservation.className,
+        status: reservation.status,
       }));
     const free = dayReason || block ? [] : computeFreeIntervals(hours.openingTime, hours.closingTime, busy, notBefore);
     return {

@@ -55,6 +55,7 @@ export function DayDetails({ date, visibleCartIds, onSchedule, onOpenReservation
                       <span className="day-reservation-time">{formatTimeRange(reservation.start, reservation.end)}</span>
                       <span>
                         {reservation.teacherName}, {reservation.className}
+                        {reservation.status === "PENDING" && <span className="event-pending"> (aguardando aprovação)</span>}
                       </span>
                     </button>
                   </li>

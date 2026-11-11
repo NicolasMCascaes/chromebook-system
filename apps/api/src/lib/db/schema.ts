@@ -8,9 +8,9 @@ import type {
   UserRole,
 } from "@chromebook/shared";
 
-export type NotificationType = "RESERVATION_CREATED";
+export type NotificationType = "RESERVATION_CREATED" | "RESERVATION_REQUESTED";
 
-export interface ReservationCreatedPayload {
+export interface ReservationNotificationPayload {
   teacherName: string;
   className: string;
   cartName: string;
@@ -18,6 +18,7 @@ export interface ReservationCreatedPayload {
   startTime: string;
   endTime: string;
   notes: string | null;
+  approvalToken?: string;
 }
 
 export const app = pgSchema("app");
@@ -90,7 +91,7 @@ export const reservations = app.table("reservations", {
   reservationDate: date("reservation_date", { mode: "string" }).notNull(),
   startTime: time("start_time").notNull(),
   endTime: time("end_time").notNull(),
-  status: text("status").$type<ReservationStatus>().notNull().default("CONFIRMED"),
+  status: text("status").$type<ReservationStatus>().notNull().default("PENDING"),
   notes: text("notes"),
   idempotencyKey: uuid("idempotency_key").notNull(),
   requestHash: text("request_hash").notNull(),
@@ -98,6 +99,10 @@ export const reservations = app.table("reservations", {
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   cancelledBy: uuid("cancelled_by").references(() => users.id, { onDelete: "restrict" }),
   cancelReason: text("cancel_reason"),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "restrict" }),
+  decisionReason: text("decision_reason"),
+  approvalTokenHash: text("approval_token_hash"),
   ...timestamps,
 });
 
@@ -126,7 +131,7 @@ export const notificationOutbox = app.table("notification_outbox", {
     .notNull()
     .references(() => reservations.id, { onDelete: "restrict" }),
   recipient: text("recipient").notNull(),
-  payload: jsonb("payload").$type<ReservationCreatedPayload>().notNull(),
+  payload: jsonb("payload").$type<ReservationNotificationPayload>().notNull(),
   status: text("status").$type<NotificationStatus>().notNull().default("PENDING"),
   attempts: integer("attempts").notNull().default(0),
   maxAttempts: integer("max_attempts").notNull().default(5),
