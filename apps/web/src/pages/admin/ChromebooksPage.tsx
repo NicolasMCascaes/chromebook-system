@@ -20,6 +20,7 @@ import { plural } from "../../lib/format";
 import { errorMessage } from "../../api/client";
 import { Modal } from "../../components/Modal";
 import { StatusMessage } from "../../components/StatusMessage";
+import { notify } from "../../lib/toast";
 import { FieldError } from "../../components/FieldError";
 import { apiFieldErrors, zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
 
@@ -153,7 +154,6 @@ function ChromebookForm({
           <FieldError message={errors.status} />
         </label>
       </div>
-      {save.isError && <StatusMessage kind="error">{errorMessage(save.error)}</StatusMessage>}
       {impact ? (
         <ImpactConfirmation
           title="Confira o impacto antes de salvar"
@@ -192,7 +192,6 @@ export function ChromebooksPage() {
   const carts = useAdminCarts();
   const chromebooks = useAdminChromebooks(filters);
   const [editing, setEditing] = useState<ChromebookDto | "new" | null>(null);
-  const [feedback, setFeedback] = useState("");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const sortedChromebooks = useMemo(
     () => (chromebooks.data ? sortByAssetTag(chromebooks.data, sortDirection) : []),
@@ -203,7 +202,7 @@ export function ChromebooksPage() {
 
   function finish(message: string) {
     setEditing(null);
-    setFeedback(message);
+    if (message) notify.success(message);
   }
 
   return (
@@ -247,7 +246,6 @@ export function ChromebooksPage() {
           disabled={!hasCarts}
           title={hasCarts ? undefined : "Cadastre um carrinho primeiro"}
           onClick={() => {
-            setFeedback("");
             setEditing("new");
           }}
         >
@@ -258,7 +256,6 @@ export function ChromebooksPage() {
       {carts.isSuccess && !hasCarts && (
         <StatusMessage kind="info">Cadastre um carrinho antes de adicionar Chromebooks.</StatusMessage>
       )}
-      {feedback && <StatusMessage kind="success">{feedback}</StatusMessage>}
       <Modal
         open={editing !== null}
         title={editing === "new" ? "Novo Chromebook" : editing ? `Editar ${editing.assetTag}` : ""}
@@ -317,7 +314,6 @@ export function ChromebooksPage() {
                       type="button"
                       className="button link"
                       onClick={() => {
-                        setFeedback("");
                         setEditing(chromebook);
                       }}
                     >

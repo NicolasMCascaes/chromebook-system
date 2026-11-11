@@ -5,6 +5,7 @@ import { errorMessage } from "../../api/client";
 import { useCurrentUser } from "../../auth/guards";
 import { Modal } from "../../components/Modal";
 import { StatusMessage } from "../../components/StatusMessage";
+import { notify } from "../../lib/toast";
 import { FieldError } from "../../components/FieldError";
 import { apiFieldErrors, zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
 
@@ -64,7 +65,6 @@ function AuthorizeUserForm({ onDone, onCancel }: { onDone: (message: string) => 
           <FieldError message={errors.password} />
         </label>
       </div>
-      {authorize.isError && <StatusMessage kind="error">{errorMessage(authorize.error)}</StatusMessage>}
       <div className="actions">
         <button type="button" className="button secondary" onClick={onCancel}>
           Cancelar
@@ -77,14 +77,18 @@ function AuthorizeUserForm({ onDone, onCancel }: { onDone: (message: string) => 
   );
 }
 
-function UserRow({ user, isSelf, onError }: { user: UserDto; isSelf: boolean; onError: (message: string) => void }) {
+function UserRow({ user, isSelf }: { user: UserDto; isSelf: boolean }) {
   const update = useUpdateUser();
   const [confirming, setConfirming] = useState(false);
 
   const change = (input: { active: boolean }) =>
     update.mutate(
       { id: user.id, input },
-      { onError: (error) => onError(errorMessage(error)), onSettled: () => setConfirming(false) },
+      {
+        onSuccess: (updated) =>
+          notify.success(updated.active ? `${updated.name} voltou a ter acesso.` : `Acesso de ${updated.name} desativado.`),
+        onSettled: () => setConfirming(false),
+      },
     );
 
   return (
@@ -123,7 +127,6 @@ function UserRow({ user, isSelf, onError }: { user: UserDto; isSelf: boolean; on
 export function UsersPage() {
   const currentUser = useCurrentUser();
   const users = useAdminUsers();
-  const [feedback, setFeedback] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const [authorizing, setAuthorizing] = useState(false);
 
   return (
@@ -133,10 +136,7 @@ export function UsersPage() {
         <button
           type="button"
           className="button primary"
-          onClick={() => {
-            setFeedback(null);
-            setAuthorizing(true);
-          }}
+          onClick={() => setAuthorizing(true)}
         >
           Autorizar acesso do TI
         </button>
@@ -147,12 +147,11 @@ export function UsersPage() {
             onCancel={() => setAuthorizing(false)}
             onDone={(text) => {
               setAuthorizing(false);
-              setFeedback({ kind: "success", text });
+              notify.success(text);
             }}
           />
         )}
       </Modal>
-      {feedback && <StatusMessage kind={feedback.kind}>{feedback.text}</StatusMessage>}
 
       {users.isPending && <StatusMessage kind="loading">Carregando usuários…</StatusMessage>}
       {users.isError && <StatusMessage kind="error">{errorMessage(users.error)}</StatusMessage>}
@@ -175,7 +174,6 @@ export function UsersPage() {
                   key={user.id}
                   user={user}
                   isSelf={user.id === currentUser.id}
-                  onError={(text) => setFeedback({ kind: "error", text })}
                 />
               ))}
             </tbody>

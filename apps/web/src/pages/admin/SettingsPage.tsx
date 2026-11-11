@@ -13,6 +13,7 @@ import {
 import { useAdminSettings, useRegenerateAccessCode, useSaveSettings } from "../../api/hooks";
 import { errorMessage } from "../../api/client";
 import { StatusMessage } from "../../components/StatusMessage";
+import { notify } from "../../lib/toast";
 import { FieldError } from "../../components/FieldError";
 import { AffectedReservations, ImpactConfirmation } from "../../features/admin/AffectedReservations";
 import { publicAgendaLink, rememberAccessCode } from "../../lib/access-code";
@@ -62,10 +63,6 @@ function PublicLinkSection({ accessCode }: { accessCode: string }) {
           {copied ? "Copiado" : "Copiar link"}
         </button>
       </div>
-      {regenerate.isError && <StatusMessage kind="error">{errorMessage(regenerate.error)}</StatusMessage>}
-      {regenerate.isSuccess && !confirming && (
-        <StatusMessage kind="success">Novo link gerado. O link anterior deixou de funcionar.</StatusMessage>
-      )}
       {confirming ? (
         <div className="stack">
           <StatusMessage kind="info">
@@ -85,6 +82,7 @@ function PublicLinkSection({ accessCode }: { accessCode: string }) {
                     rememberAccessCode(settings.publicAccessCode);
                     setCopied(false);
                     setConfirming(false);
+                    notify.success("Novo link gerado. O link anterior deixou de funcionar.");
                   },
                 })
               }
@@ -212,6 +210,7 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
     try {
       const result = await save.mutateAsync(parsed.data);
       setAffected(result.affectedReservations);
+      notify.success("Configurações salvas.");
     } catch (error) {
       setErrors(apiFieldErrors(error));
     }
@@ -373,13 +372,7 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
         </label>
       </section>
 
-      {save.isError && <StatusMessage kind="error">{errorMessage(save.error)}</StatusMessage>}
-      {save.isSuccess && affected && (
-        <>
-          <StatusMessage kind="success">Configurações salvas.</StatusMessage>
-          <AffectedReservations reservations={affected} intro="Fora do novo horário," />
-        </>
-      )}
+      {save.isSuccess && affected && <AffectedReservations reservations={affected} intro="Fora do novo horário," />}
       {warnings ? (
         <ImpactConfirmation
           title="Confira antes de salvar"

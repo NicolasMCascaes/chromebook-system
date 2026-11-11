@@ -4,6 +4,7 @@ import { useCancelReservation, useReservation } from "../../api/hooks";
 import { errorMessage } from "../../api/client";
 import { Modal } from "../../components/Modal";
 import { StatusMessage } from "../../components/StatusMessage";
+import { notify } from "../../lib/toast";
 import { describeWithSchedules } from "./schedule-model";
 import { cancelTokenFor } from "../../lib/my-reservations";
 import { ReservationSummary } from "./ReservationDialog";
@@ -50,8 +51,6 @@ function ReservationDetails({ reservationId, schedules, onClose }: { reservation
         periodsLabel={describeWithSchedules(schedules, data.startTime, data.endTime)}
       />
 
-      {cancel.isError && <StatusMessage kind="error">{errorMessage(cancel.error)}</StatusMessage>}
-
       {!cancelled && data.canCancel && !cancelToken && (
         <p className="muted small-text">
           Esta reserva foi feita em outro navegador. Para cancelá-la, fale com o TI.
@@ -75,7 +74,12 @@ function ReservationDetails({ reservationId, schedules, onClose }: { reservation
               onClick={() =>
                 cancel.mutate(
                   { id: data.id, reason: reason.trim() || undefined, cancelToken },
-                  { onSuccess: () => setConfirming(false) },
+                  {
+                    onSuccess: () => {
+                      setConfirming(false);
+                      notify.success("Reserva cancelada. O horário foi liberado.");
+                    },
+                  },
                 )
               }
             >

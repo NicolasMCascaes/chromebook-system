@@ -14,6 +14,7 @@ import { useAdminBlocks, useAdminCarts, useDeleteBlock, usePreviewBlock, useSave
 import { errorMessage } from "../../api/client";
 import { Modal } from "../../components/Modal";
 import { StatusMessage } from "../../components/StatusMessage";
+import { notify } from "../../lib/toast";
 import { FieldError } from "../../components/FieldError";
 import { AffectedReservations } from "../../features/admin/AffectedReservations";
 import { apiFieldErrors, zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
@@ -134,9 +135,6 @@ function BlockForm({
 
       {preview?.length === 0 && <StatusMessage kind="success">Nenhuma reserva confirmada nesse período.</StatusMessage>}
       {preview && <AffectedReservations reservations={preview} intro="Nesse período," />}
-      {(save.isError || previewBlock.isError) && (
-        <StatusMessage kind="error">{errorMessage(save.error ?? previewBlock.error)}</StatusMessage>
-      )}
 
       <div className="actions">
         <button type="button" className="button secondary" onClick={() => onDone(null)}>
@@ -188,7 +186,6 @@ function BlockRow({ block, onEdit, onDeleted }: { block: BlockDto; onEdit: () =>
             </button>
           </>
         )}
-        {remove.isError && <div className="field-error">{errorMessage(remove.error)}</div>}
       </td>
     </tr>
   );
@@ -197,7 +194,7 @@ function BlockRow({ block, onEdit, onDeleted }: { block: BlockDto; onEdit: () =>
 export function BlocksPage() {
   const [year, setYear] = useState(() => Number(schoolNow(new Date()).date.slice(0, 4)));
   const [editing, setEditing] = useState<BlockDto | "new" | null>(null);
-  const [result, setResult] = useState<{ message: string; affected: AdminReservationDto[] } | null>(null);
+  const [affected, setAffected] = useState<AdminReservationDto[]>([]);
   const blocks = useAdminBlocks(year);
   const carts = useAdminCarts();
 
@@ -217,7 +214,7 @@ export function BlocksPage() {
           type="button"
           className="button primary"
           onClick={() => {
-            setResult(null);
+            setAffected([]);
             setEditing("new");
           }}
         >
@@ -229,12 +226,7 @@ export function BlocksPage() {
         cancelada automaticamente.
       </p>
 
-      {result && (
-        <>
-          <StatusMessage kind="success">{result.message}</StatusMessage>
-          <AffectedReservations reservations={result.affected} intro="No período bloqueado," />
-        </>
-      )}
+      {affected.length > 0 && <AffectedReservations reservations={affected} intro="No período bloqueado," />}
       <Modal
         open={editing !== null}
         title={editing === "new" ? "Novo bloqueio ou feriado" : "Editar bloqueio"}
@@ -247,7 +239,8 @@ export function BlocksPage() {
             carts={carts.data}
             onDone={(outcome) => {
               setEditing(null);
-              setResult(outcome);
+              if (outcome) notify.success(outcome.message);
+              setAffected(outcome?.affected ?? []);
             }}
           />
         )}
@@ -275,10 +268,13 @@ export function BlocksPage() {
                   key={block.id}
                   block={block}
                   onEdit={() => {
-                    setResult(null);
+                    setAffected([]);
                     setEditing(block);
                   }}
-                  onDeleted={() => setResult({ message: "Bloqueio excluído. As datas voltaram a aceitar reservas.", affected: [] })}
+                  onDeleted={() => {
+                    setAffected([]);
+                    notify.success("Bloqueio excluído. As datas voltaram a aceitar reservas.");
+                  }}
                 />
               ))}
             </tbody>

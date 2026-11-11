@@ -23,6 +23,7 @@ import {
 import { errorMessage } from "../../api/client";
 import { Modal } from "../../components/Modal";
 import { StatusMessage } from "../../components/StatusMessage";
+import { notify } from "../../lib/toast";
 import { FieldError } from "../../components/FieldError";
 import { apiFieldErrors, zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
 import { formatDateShort, formatTimeRange, plural } from "../../lib/format";
@@ -134,7 +135,6 @@ function EditReservationForm({
           <FieldError message={errors.notes} />
         </label>
       </div>
-      {edit.isError && <StatusMessage kind="error">{errorMessage(edit.error)}</StatusMessage>}
       <div className="actions">
         <button type="button" className="button secondary" onClick={() => onDone("")}>
           Voltar
@@ -167,7 +167,6 @@ function CancelReservationForm({
         <span>Motivo do cancelamento (opcional)</span>
         <input value={reason} maxLength={300} onChange={(event) => setReason(event.target.value)} />
       </label>
-      {cancel.isError && <StatusMessage kind="error">{errorMessage(cancel.error)}</StatusMessage>}
       <div className="actions">
         <button type="button" className="button secondary" disabled={cancel.isPending} onClick={() => onDone("")}>
           Manter reserva
@@ -214,7 +213,6 @@ function DecideReservationForm({ reservation, onDone }: { reservation: AdminRese
       />
       <DecisionPanel
         busy={decide.isPending}
-        error={decide.isError ? errorMessage(decide.error) : null}
         onBack={() => onDone("")}
         onDecide={(input) =>
           decide.mutate(
@@ -289,7 +287,6 @@ export function ReservationsPage() {
   const [filters, setFilters] = useState<AdminReservationFilters>(initialFilters);
   const [search, setSearch] = useState("");
   const [action, setAction] = useState<{ type: "edit" | "cancel" | "decide"; reservation: AdminReservationDto } | null>(null);
-  const [feedback, setFeedback] = useState("");
   const reservations = useAdminReservations(filters);
   const carts = useAdminCarts();
 
@@ -297,16 +294,14 @@ export function ReservationsPage() {
 
   function finish(message: string) {
     setAction(null);
-    if (message) setFeedback(message);
+    if (message) notify.success(message);
   }
 
   return (
     <div className="stack">
-      {feedback && <StatusMessage kind="success">{feedback}</StatusMessage>}
       <FailedNotifications />
       <PendingRequests
         onDecide={(reservation) => {
-          setFeedback("");
           setAction({ type: "decide", reservation });
         }}
       />
@@ -411,7 +406,6 @@ export function ReservationsPage() {
                           type="button"
                           className="button link"
                           onClick={() => {
-                            setFeedback("");
                             setAction({ type: "decide", reservation });
                           }}
                         >
@@ -424,7 +418,6 @@ export function ReservationsPage() {
                             type="button"
                             className="button link"
                             onClick={() => {
-                              setFeedback("");
                               setAction({ type: "edit", reservation });
                             }}
                           >
@@ -434,7 +427,6 @@ export function ReservationsPage() {
                             type="button"
                             className="button link danger-text"
                             onClick={() => {
-                              setFeedback("");
                               setAction({ type: "cancel", reservation });
                             }}
                           >

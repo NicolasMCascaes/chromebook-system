@@ -48,7 +48,6 @@ function ApprovalRequest({ id, approvalToken }: { id: string; approvalToken: str
       {reservation.status === "PENDING" ? (
         <DecisionPanel
           busy={decide.isPending}
-          error={decide.isError ? errorMessage(decide.error) : null}
           onDecide={(input) => decide.mutate({ id, input: { ...input, approvalToken } })}
         />
       ) : (

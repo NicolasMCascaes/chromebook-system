@@ -108,6 +108,7 @@ function useInvalidateSchedule() {
 export function useCreateReservation() {
   const invalidateSchedule = useInvalidateSchedule();
   return useMutation({
+    meta: { toastErrors: false },
     mutationFn: ({ input, idempotencyKey }: { input: ReservationInput; idempotencyKey: string }) =>
       apiFetch<ReservationDto>("/api/reservations", {
         method: "POST",

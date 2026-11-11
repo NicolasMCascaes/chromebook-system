@@ -4,18 +4,16 @@ import { StatusMessage } from "../../components/StatusMessage";
 
 interface DecisionPanelProps {
   busy: boolean;
-  error: string | null;
   onDecide: (input: Pick<ReservationDecisionInput, "decision" | "reason">) => void;
   onBack?: () => void;
 }
 
-export function DecisionPanel({ busy, error, onDecide, onBack }: DecisionPanelProps) {
+export function DecisionPanel({ busy, onDecide, onBack }: DecisionPanelProps) {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
 
   return (
     <div className="stack">
-      {error && <StatusMessage kind="error">{error}</StatusMessage>}
       {rejecting ? (
         <>
           <label className="field">

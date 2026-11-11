@@ -19,7 +19,6 @@ export function DevLoginPanel() {
       <StatusMessage kind="info">Modo de desenvolvimento: escolha um usuário para entrar sem e-mail.</StatusMessage>
       {users.isPending && <StatusMessage kind="loading">Carregando usuários…</StatusMessage>}
       {users.isError && <StatusMessage kind="error">{errorMessage(users.error)}</StatusMessage>}
-      {login.isError && <StatusMessage kind="error">{errorMessage(login.error)}</StatusMessage>}
       {users.data?.map((user) => (
         <button
           key={user.id}

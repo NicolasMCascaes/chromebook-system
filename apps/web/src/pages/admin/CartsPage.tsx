@@ -5,6 +5,7 @@ import { ImpactConfirmation } from "../../features/admin/AffectedReservations";
 import { errorMessage } from "../../api/client";
 import { Modal } from "../../components/Modal";
 import { StatusMessage } from "../../components/StatusMessage";
+import { notify } from "../../lib/toast";
 import { FieldError } from "../../components/FieldError";
 import { apiFieldErrors, zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
 
@@ -108,7 +109,6 @@ function CartForm({ cart, onDone }: { cart?: CartDto; onDone: (message: string) 
           <FieldError message={errors.description} />
         </label>
       </div>
-      {save.isError && <StatusMessage kind="error">{errorMessage(save.error)}</StatusMessage>}
       {impact ? (
         <ImpactConfirmation
           title={`Desativar ${cart?.name ?? "carrinho"}?`}
@@ -140,11 +140,10 @@ function CartForm({ cart, onDone }: { cart?: CartDto; onDone: (message: string) 
 export function CartsPage() {
   const carts = useAdminCarts();
   const [editing, setEditing] = useState<CartDto | "new" | null>(null);
-  const [feedback, setFeedback] = useState("");
 
   function finish(message: string) {
     setEditing(null);
-    setFeedback(message);
+    if (message) notify.success(message);
   }
 
   return (
@@ -155,7 +154,6 @@ export function CartsPage() {
           type="button"
           className="button primary"
           onClick={() => {
-            setFeedback("");
             setEditing("new");
           }}
         >
@@ -163,7 +161,6 @@ export function CartsPage() {
         </button>
       </div>
 
-      {feedback && <StatusMessage kind="success">{feedback}</StatusMessage>}
       <Modal
         open={editing !== null}
         title={editing === "new" ? "Novo carrinho" : editing ? `Editar ${editing.name}` : ""}
@@ -208,7 +205,6 @@ export function CartsPage() {
                       type="button"
                       className="button link"
                       onClick={() => {
-                        setFeedback("");
                         setEditing(cart);
                       }}
                     >
