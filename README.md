@@ -22,6 +22,7 @@ npm install
 2. **Authentication → URL Configuration**: em *Site URL*, cadastre a origem do frontend.
 3. **Project Settings → JWT Keys**: use as chaves de assinatura assimétricas (padrão em projetos novos). A API valida o token pelo JWKS do projeto.
 4. **Data API**: não adicione o schema `app` aos *Exposed schemas*. As tabelas de negócio ficam acessíveis apenas pela API.
+5. **Connect**: use em `DATABASE_URL` a string do *Transaction pooler* (porta 6543). O cliente já usa `prepare: false` e `max_pipeline: 1`, exigidos por esse modo. Não use o *Session pooler* (5432) na Vercel: instâncias congeladas mantêm as conexões abertas e esgotam o limite do pool.
 
 ## Variáveis de ambiente
 

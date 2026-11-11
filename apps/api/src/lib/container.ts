@@ -14,10 +14,13 @@ export interface AppContainer {
   clock: Clock;
   emailSender: EmailSender;
   runAfterResponse: (task: () => Promise<void>) => void;
+  holdUntilConnectionsClose?: () => void;
   cronSecret?: string;
   appPublicUrl?: string;
   devAuthSecret?: string;
 }
+
+const CONNECTION_CLOSE_GRACE_MS = 2_000;
 
 const globalForContainer = globalThis as unknown as { appContainer?: AppContainer };
 
@@ -28,12 +31,13 @@ function createEmailSender(env: ServerEnv): EmailSender {
 
 function createDefaultContainer(): AppContainer {
   const env = readServerEnv();
-  const { db } = createDatabase(env.DATABASE_URL);
+  const { db } = createDatabase(env.DATABASE_URL, { max: 1 });
   const shared = {
     db,
     clock: systemClock,
     emailSender: createEmailSender(env),
     runAfterResponse: (task: () => Promise<void>) => after(task),
+    holdUntilConnectionsClose: () => after(() => new Promise<void>((resolve) => setTimeout(resolve, CONNECTION_CLOSE_GRACE_MS))),
     cronSecret: env.CRON_SECRET,
     appPublicUrl: env.APP_PUBLIC_URL,
   };

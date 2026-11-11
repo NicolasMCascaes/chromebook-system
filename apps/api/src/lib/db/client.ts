@@ -6,7 +6,9 @@ export function createDatabase(connectionString: string, options: { max?: number
   const client = postgres(connectionString, {
     prepare: false,
     max: options.max ?? 5,
-    idle_timeout: 20,
+    max_pipeline: 1,
+    query_timeout: 20,
+    idle_timeout: 1,
     connect_timeout: 10,
     onnotice: () => {},
   });

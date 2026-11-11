@@ -37,7 +37,7 @@ Observação: as imagens de referência visual mencionadas não chegaram nesta c
 3. **Persistência: Drizzle ORM + postgres.js + migrations SQL versionadas, escritas à mão em `apps/api/drizzle/` e registradas em `meta/_journal.json`.** O `drizzle-kit` foi removido por não ser necessário (e trazia um alerta de segurança transitivo).
    - Mais próximo de "SQL explícito + Flyway" do que Prisma; aceita migrations customizadas para `btree_gist`, `EXCLUDE`, coluna gerada `tsrange` e `GRANT/REVOKE`, que Prisma não modela.
    - Transações explícitas (`db.transaction`) e captura de SQLSTATE (`23P01`, `23505`).
-   - Conexão via Supavisor em modo transação (porta 6543) com `prepare: false`, adequado a serverless.
+   - Conexão via Supavisor em modo transação (porta 6543) com `prepare: false` e `max_pipeline: 1`. O Supavisor anterior à 2.10 trava com consultas em pipeline nesse modo; o modo sessão (5432) foi descartado porque as instâncias congeladas da Vercel prendem conexões e esgotam o pool.
    - Regra igual ao Flyway: migration aplicada nunca é editada.
 4. **Datas sem UTC**: reserva guarda `reservation_date date` + `start_time time` + `end_time time` no horário de parede de São Paulo. Drizzle em `mode: 'string'` para `date`/`time`, assim nada passa por `Date` do JS. "Agora" é calculado sempre em `America/Sao_Paulo` (constante no código, não configurável).
 5. **Concorrência no banco**: `EXCLUDE USING gist (cart_id WITH =, period WITH &&) WHERE (status = 'CONFIRMED')`, com `period = tsrange(date+start, date+end, '[)')`. O intervalo semiaberto permite 08:00–09:00 seguido de 09:00–10:00. Cancelada sai do índice. A violação (`23P01`) vira HTTP 409.

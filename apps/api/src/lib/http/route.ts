@@ -1,3 +1,4 @@
+import { getContainer } from "../container";
 import { toErrorResponse } from "./responses";
 
 type Params = Record<string, string>;
@@ -13,6 +14,8 @@ export function route<P extends Params = Params>(handler: (request: Request, par
       return await handler(request, params);
     } catch (error) {
       return toErrorResponse(error);
+    } finally {
+      getContainer().holdUntilConnectionsClose?.();
     }
   };
 }
