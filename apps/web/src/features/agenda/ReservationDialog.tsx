@@ -317,11 +317,6 @@ function ReservationForm({
 
         {values.mode === "period" ? (
           <div className="form-grid">
-            {classSchedule && (
-              <p className="grade-note muted small-text">
-                Aulas da grade <strong>{classSchedule.name}</strong>, definida pela turma.
-              </p>
-            )}
             {!classSchedule && schedules.length > 1 && (
               <label className="field full">
                 <span>Horário da turma</span>

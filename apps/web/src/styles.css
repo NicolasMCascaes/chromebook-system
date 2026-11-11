@@ -674,8 +674,3 @@ tbody tr:last-child td {
   font-size: 0.875rem;
   color: var(--color-muted);
 }
-
-.grade-note {
-  grid-column: 1 / -1;
-  margin: 0;
-}
