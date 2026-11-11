@@ -2,11 +2,13 @@ import { createDatabase, type Database } from "./db/client";
 import { readServerEnv } from "./env";
 import { createSupabaseTokenVerifier, type TokenVerifier } from "./auth/token-verifier";
 import { createSupabaseAdminClient, SupabaseAuthAdminGateway, type AuthAdminGateway } from "./auth/auth-admin";
+import { systemClock, type Clock } from "./clock";
 
 export interface AppContainer {
   db: Database;
   tokenVerifier: TokenVerifier;
   authAdmin: AuthAdminGateway;
+  clock: Clock;
 }
 
 const globalForContainer = globalThis as unknown as { appContainer?: AppContainer };
@@ -21,6 +23,7 @@ function createDefaultContainer(): AppContainer {
       createSupabaseAdminClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY),
       db,
     ),
+    clock: systemClock,
   };
 }
 

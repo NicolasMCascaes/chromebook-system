@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
-import { boolean, integer, pgSchema, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import type { ChromebookStatus, UserRole } from "@chromebook/shared";
+import { boolean, date, integer, pgSchema, smallint, text, time, timestamp, uuid } from "drizzle-orm/pg-core";
+import type { CalendarBlockKind, ChromebookStatus, ReservationStatus, UserRole } from "@chromebook/shared";
 
 export const app = pgSchema("app");
 
@@ -40,6 +40,50 @@ export const chromebooks = app.table("chromebooks", {
   ...timestamps,
 });
 
+export const schoolSettings = app.table("school_settings", {
+  id: smallint("id").primaryKey().default(1),
+  openingTime: time("opening_time").notNull(),
+  closingTime: time("closing_time").notNull(),
+  slotMinutes: smallint("slot_minutes").notNull(),
+  ...timestamps,
+});
+
+export const calendarBlocks = app.table("calendar_blocks", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  kind: text("kind").$type<CalendarBlockKind>().notNull(),
+  startDate: date("start_date", { mode: "string" }).notNull(),
+  endDate: date("end_date", { mode: "string" }).notNull(),
+  reason: text("reason").notNull(),
+  cartId: uuid("cart_id").references(() => carts.id, { onDelete: "restrict" }),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "restrict" }),
+  ...timestamps,
+});
+
+export const reservations = app.table("reservations", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  cartId: uuid("cart_id")
+    .notNull()
+    .references(() => carts.id, { onDelete: "restrict" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "restrict" }),
+  className: text("class_name").notNull(),
+  reservationDate: date("reservation_date", { mode: "string" }).notNull(),
+  startTime: time("start_time").notNull(),
+  endTime: time("end_time").notNull(),
+  status: text("status").$type<ReservationStatus>().notNull().default("CONFIRMED"),
+  notes: text("notes"),
+  idempotencyKey: uuid("idempotency_key").notNull(),
+  requestHash: text("request_hash").notNull(),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelledBy: uuid("cancelled_by").references(() => users.id, { onDelete: "restrict" }),
+  cancelReason: text("cancel_reason"),
+  ...timestamps,
+});
+
 export type UserRow = typeof users.$inferSelect;
 export type CartRow = typeof carts.$inferSelect;
 export type ChromebookRow = typeof chromebooks.$inferSelect;
+export type SchoolSettingsRow = typeof schoolSettings.$inferSelect;
+export type CalendarBlockRow = typeof calendarBlocks.$inferSelect;
+export type ReservationRow = typeof reservations.$inferSelect;

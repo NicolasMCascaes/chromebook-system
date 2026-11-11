@@ -41,6 +41,9 @@ Observação: as imagens de referência visual mencionadas não chegaram nesta c
    - Regra igual ao Flyway: migration aplicada nunca é editada.
 4. **Datas sem UTC**: reserva guarda `reservation_date date` + `start_time time` + `end_time time` no horário de parede de São Paulo. Drizzle em `mode: 'string'` para `date`/`time`, assim nada passa por `Date` do JS. "Agora" é calculado sempre em `America/Sao_Paulo` (constante no código, não configurável).
 5. **Concorrência no banco**: `EXCLUDE USING gist (cart_id WITH =, period WITH &&) WHERE (status = 'CONFIRMED')`, com `period = tsrange(date+start, date+end, '[)')`. O intervalo semiaberto permite 08:00–09:00 seguido de 09:00–10:00. Cancelada sai do índice. A violação (`23P01`) vira HTTP 409.
+   - Inserções simultâneas na mesma faixa podem gerar deadlock (`40P01`) na verificação da restrição. A transação é repetida até 3 vezes e, na nova tentativa, resulta em 409 ou na reserva já existente.
+   - Se a violação vier de um clique repetido (mesma `Idempotency-Key`), a API devolve a reserva já criada em vez de 409.
+   - `btree_gist` fica no schema `extensions`, como recomenda o Supabase.
 6. **Idempotência**: o frontend gera um UUID por intenção de reserva e envia no header `Idempotency-Key`. Há `UNIQUE (user_id, idempotency_key)` e `request_hash`. A API faz `INSERT ... ON CONFLICT DO NOTHING`; havendo conflito com o mesmo hash, devolve a reserva existente (200), e com hash diferente, 422. O botão também fica desabilitado durante o envio, mas a proteção real é a do banco.
 7. **Autenticação (Supabase Auth, magic link)**:
    - Cadastros públicos desativados no Supabase.
@@ -66,7 +69,7 @@ Todas as tabelas têm `id uuid PK default gen_random_uuid()` (exceto `school_set
   - Índices em `(reservation_date)` e `(user_id, reservation_date)`.
   - Sem `ON DELETE CASCADE`; FKs com `RESTRICT`.
 - **calendar_blocks**: `kind` (`BLOCK`|`HOLIDAY_NATIONAL`|`HOLIDAY_STATE`|`HOLIDAY_MUNICIPAL`|`SCHOOL_RECESS`), `start_date`, `end_date` (check `>= start_date`), `reason not null`, `cart_id FK null` (null = todos os carrinhos), `created_by`. Índice GiST em `daterange(start_date, end_date, '[]')`. Feriados e recessos são cadastrados por data; o filtro por ano é `extract(year ...)`. Unifica bloqueios e feriados numa tabela só porque a regra de validação é a mesma.
-- **school_settings**: linha única (`id smallint PK check (id = 1)`), `opening_time`, `closing_time` (check `closing > opening`), `slot_minutes` (granularidade, ex.: 15), `notification_emails text[]`. Mesmo horário de segunda a sexta nesta versão.
+- **school_settings**: linha única (`id smallint PK check (id = 1)`), `opening_time`, `closing_time` (check `closing > opening`), `slot_minutes` (5, 10, 15, 20, 30 ou 60). Valores iniciais: 07:00 às 18:00, granularidade de 5 minutos. `notification_emails` entra na Etapa 5. Mesmo horário de segunda a sexta nesta versão.
 - **notification_outbox**: `type`, `reservation_id FK`, `recipient`, `payload jsonb`, `status` (`PENDING`|`SENT`|`FAILED`), `attempts`, `max_attempts`, `next_attempt_at`, `last_error`, `sent_at`. Índice parcial `(next_attempt_at) WHERE status = 'PENDING'`.
 
 ## API (Route Handlers em `apps/api/src/app/api/...`)

@@ -8,6 +8,13 @@
       "when": 1762819200000,
       "tag": "0000_init_users_carts_chromebooks",
       "breakpoints": false
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1762905600000,
+      "tag": "0001_reservations_blocks_settings",
+      "breakpoints": false
     }
   ]
 }

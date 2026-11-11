@@ -2,6 +2,8 @@ export const PG_UNIQUE_VIOLATION = "23505";
 export const PG_FOREIGN_KEY_VIOLATION = "23503";
 export const PG_CHECK_VIOLATION = "23514";
 export const PG_EXCLUSION_VIOLATION = "23P01";
+export const PG_DEADLOCK_DETECTED = "40P01";
+export const PG_SERIALIZATION_FAILURE = "40001";
 
 interface PgErrorLike {
   code?: string;
@@ -34,4 +36,9 @@ export function pgConstraint(error: unknown): string | undefined {
 export function isPgError(error: unknown, code: string, constraint?: string): boolean {
   if (pgErrorCode(error) !== code) return false;
   return constraint === undefined || pgConstraint(error) === constraint;
+}
+
+export function isRetryableTransactionError(error: unknown): boolean {
+  const code = pgErrorCode(error);
+  return code === PG_DEADLOCK_DETECTED || code === PG_SERIALIZATION_FAILURE;
 }

@@ -1,6 +1,6 @@
 import { asc, eq, getTableColumns, sql, type SQL } from "drizzle-orm";
 import type { CartDto } from "@chromebook/shared";
-import type { Database } from "@/lib/db/client";
+import type { Database, DbExecutor } from "@/lib/db/client";
 import { carts, chromebooks, type CartRow } from "@/lib/db/schema";
 
 const countWhere = (condition: SQL) => sql<number>`count(${chromebooks.id}) filter (where ${condition})`.mapWith(Number);
@@ -66,4 +66,16 @@ export function toCartDto(row: CartWithEquipmentRow): CartDto {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+export async function findCartForReservation(
+  db: DbExecutor,
+  id: string,
+): Promise<Pick<CartRow, "id" | "active" | "name"> | undefined> {
+  const [row] = await db
+    .select({ id: carts.id, active: carts.active, name: carts.name })
+    .from(carts)
+    .where(eq(carts.id, id))
+    .for("share");
+  return row;
 }

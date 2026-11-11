@@ -2,12 +2,22 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createTestContext, type TestContext } from "./helpers/context";
 
 const PERMISSION_DENIED = "42501";
+const EXPECTED_TABLES = ["calendar_blocks", "carts", "chromebooks", "reservations", "school_settings", "users"];
 
 describe("tabelas de negócio fora da API pública do Supabase", () => {
   let ctx: TestContext;
+  let tables: string[];
 
   beforeAll(async () => {
     ctx = await createTestContext();
+    const rows = await ctx.client<{ relname: string }[]>`
+      select c.relname
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'app' and c.relkind = 'r'
+      order by c.relname
+    `;
+    tables = rows.map((row) => row.relname);
   });
   afterAll(() => ctx.close());
 
@@ -17,25 +27,28 @@ describe("tabelas de negócio fora da API pública do Supabase", () => {
       return tx.unsafe(statement);
     });
 
-  it.each(["anon", "authenticated"] as const)("papel %s não lê nem altera tabelas do schema app", async (role) => {
-    for (const statement of [
-      "select * from app.users",
-      "select * from app.carts",
-      "select * from app.chromebooks",
-      "insert into app.carts (name, color) values ('x', '#000000')",
-    ]) {
-      await expect(queryAs(role, statement), `${role}: ${statement}`).rejects.toMatchObject({ code: PERMISSION_DENIED });
+  it("o schema contém as tabelas esperadas", () => {
+    expect(tables).toEqual(expect.arrayContaining([...EXPECTED_TABLES, "schema_migrations"]));
+  });
+
+  it.each(["anon", "authenticated"] as const)("papel %s não lê nem altera nenhuma tabela do schema app", async (role) => {
+    for (const table of tables) {
+      await expect(queryAs(role, `select * from app.${table}`), `${role}: select ${table}`).rejects.toMatchObject({
+        code: PERMISSION_DENIED,
+      });
+      await expect(queryAs(role, `delete from app.${table}`), `${role}: delete ${table}`).rejects.toMatchObject({
+        code: PERMISSION_DENIED,
+      });
     }
   });
 
-  it("todas as tabelas do schema app têm RLS habilitado", async () => {
-    const rows = await ctx.client<{ relname: string; relrowsecurity: boolean }[]>`
-      select c.relname, c.relrowsecurity
+  it("todas as tabelas de negócio têm RLS habilitado", async () => {
+    const rows = await ctx.client<{ relname: string }[]>`
+      select c.relname
       from pg_class c
       join pg_namespace n on n.oid = c.relnamespace
-      where n.nspname = 'app' and c.relkind = 'r' and c.relname <> 'schema_migrations'
+      where n.nspname = 'app' and c.relkind = 'r' and c.relname <> 'schema_migrations' and not c.relrowsecurity
     `;
-    expect(rows.length).toBeGreaterThanOrEqual(3);
-    expect(rows.filter((row) => !row.relrowsecurity)).toEqual([]);
+    expect(rows).toEqual([]);
   });
 });

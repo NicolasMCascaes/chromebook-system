@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { CHROMEBOOK_STATUSES, USER_ROLES } from "./enums";
+import { CHROMEBOOK_STATUSES, MAX_CALENDAR_RANGE_DAYS, USER_ROLES } from "./enums";
+import { daysBetween, isValidIsoDate, TIME_PATTERN, timeToMinutes } from "./time";
 
 const requiredText = (label: string, max: number) =>
   z
@@ -101,3 +102,50 @@ export const userUpdateSchema = z
   })
   .refine(atLeastOneField, NO_FIELDS_MESSAGE);
 export type UserUpdate = z.input<typeof userUpdateSchema>;
+
+const isoDate = z
+  .string({ error: "Data é obrigatória." })
+  .refine(isValidIsoDate, "Data inválida. Use o formato AAAA-MM-DD.");
+
+const clockTime = (label: string) =>
+  z.string({ error: `${label} é obrigatório.` }).regex(TIME_PATTERN, `${label} inválido. Use o formato HH:MM.`);
+
+export const reservationInputSchema = z
+  .object({
+    cartId: z.uuid("Selecione um carrinho."),
+    className: requiredText("Turma", 60),
+    date: isoDate,
+    startTime: clockTime("Horário de início"),
+    endTime: clockTime("Horário de término"),
+    notes: optionalText("Observação", 500).optional().default(null),
+  })
+  .refine((value) => timeToMinutes(value.endTime) > timeToMinutes(value.startTime), {
+    message: "O horário de término deve ser posterior ao de início.",
+    path: ["endTime"],
+  });
+export type ReservationInput = z.input<typeof reservationInputSchema>;
+
+export const reservationCancelSchema = z.object({
+  reason: optionalText("Motivo", 300).optional().default(null),
+});
+export type ReservationCancelInput = z.input<typeof reservationCancelSchema>;
+
+export const calendarQuerySchema = z
+  .object({
+    from: isoDate,
+    to: isoDate,
+    cartId: z.uuid("Carrinho inválido.").optional(),
+  })
+  .refine((value) => daysBetween(value.from, value.to) >= 0, {
+    message: "A data final deve ser igual ou posterior à inicial.",
+    path: ["to"],
+  })
+  .refine((value) => daysBetween(value.from, value.to) <= MAX_CALENDAR_RANGE_DAYS, {
+    message: `O período consultado deve ter no máximo ${MAX_CALENDAR_RANGE_DAYS} dias.`,
+    path: ["to"],
+  });
+
+export const availabilityQuerySchema = z.object({
+  date: isoDate,
+  cartId: z.uuid("Carrinho inválido.").optional(),
+});
