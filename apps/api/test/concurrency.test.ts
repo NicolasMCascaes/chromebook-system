@@ -2,8 +2,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { ReservationDto } from "@chromebook/shared";
 import { reservations } from "@/lib/db/schema";
-import { createTestContext, type TestContext, type TestUser } from "./helpers/context";
-import { NEXT_TUESDAY, postReservation, seedCarts } from "./helpers/reservations";
+import { createTestContext, type TestContext } from "./helpers/context";
+import { createTeacher, NEXT_TUESDAY, postReservation, seedCarts, type Teacher } from "./helpers/reservations";
 
 const CONCURRENT_REQUESTS = 8;
 
@@ -11,7 +11,7 @@ describe("concorrência e restrição no banco", () => {
   let ctx: TestContext;
   let cart1: string;
   let cart2: string;
-  let teachers: TestUser[];
+  let teachers: Teacher[];
 
   beforeAll(async () => {
     ctx = await createTestContext();
@@ -20,9 +20,7 @@ describe("concorrência e restrição no banco", () => {
   beforeEach(async () => {
     await ctx.reset();
     ({ cart1, cart2 } = await seedCarts(ctx));
-    teachers = await Promise.all(
-      Array.from({ length: CONCURRENT_REQUESTS }, (_, index) => ctx.createUser("PROFESSOR", { name: `Professor ${index}` })),
-    );
+    teachers = Array.from({ length: CONCURRENT_REQUESTS }, (_, index) => createTeacher(`Professor ${index}`));
   });
 
   afterAll(() => ctx.close());
@@ -68,12 +66,12 @@ describe("concorrência e restrição no banco", () => {
   });
 
   describe("restrição de exclusão aplicada diretamente no PostgreSQL", () => {
-    const insertRaw = (teacher: TestUser, cartId: string, start: string, end: string, status = "CONFIRMED") =>
+    const insertRaw = (teacher: Teacher, cartId: string, start: string, end: string, status = "CONFIRMED") =>
       ctx.client`
         insert into app.reservations
-          (cart_id, user_id, class_name, reservation_date, start_time, end_time, status, cancelled_at, idempotency_key, request_hash)
+          (cart_id, teacher_name, class_name, reservation_date, start_time, end_time, status, cancelled_at, idempotency_key, request_hash)
         values
-          (${cartId}, ${teacher.id}, 'Turma', ${NEXT_TUESDAY}, ${start}, ${end}, ${status},
+          (${cartId}, ${teacher.name}, 'Turma', ${NEXT_TUESDAY}, ${start}, ${end}, ${status},
            case when ${status} = 'CANCELLED' then now() end, gen_random_uuid(), 'raw')
       `;
 

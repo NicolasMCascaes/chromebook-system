@@ -64,9 +64,8 @@ export const reservations = app.table("reservations", {
   cartId: uuid("cart_id")
     .notNull()
     .references(() => carts.id, { onDelete: "restrict" }),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "restrict" }),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "restrict" }),
+  teacherName: text("teacher_name").notNull(),
   className: text("class_name").notNull(),
   reservationDate: date("reservation_date", { mode: "string" }).notNull(),
   startTime: time("start_time").notNull(),
@@ -75,9 +74,18 @@ export const reservations = app.table("reservations", {
   notes: text("notes"),
   idempotencyKey: uuid("idempotency_key").notNull(),
   requestHash: text("request_hash").notNull(),
+  cancelTokenHash: text("cancel_token_hash"),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   cancelledBy: uuid("cancelled_by").references(() => users.id, { onDelete: "restrict" }),
   cancelReason: text("cancel_reason"),
+  ...timestamps,
+});
+
+export const classPeriods = app.table("class_periods", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  startTime: time("start_time").notNull(),
+  endTime: time("end_time").notNull(),
   ...timestamps,
 });
 
@@ -87,3 +95,4 @@ export type ChromebookRow = typeof chromebooks.$inferSelect;
 export type SchoolSettingsRow = typeof schoolSettings.$inferSelect;
 export type CalendarBlockRow = typeof calendarBlocks.$inferSelect;
 export type ReservationRow = typeof reservations.$inferSelect;
+export type ClassPeriodRow = typeof classPeriods.$inferSelect;

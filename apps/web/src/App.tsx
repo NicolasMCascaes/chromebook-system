@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router";
 import { RequireAdmin, RequireAuth } from "./auth/guards";
 import { AppLayout } from "./components/AppLayout";
+import { PublicLayout } from "./components/PublicLayout";
 import { LoginPage } from "./pages/LoginPage";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { AgendaPage } from "./pages/AgendaPage";
@@ -12,12 +13,15 @@ import { UsersPage } from "./pages/admin/UsersPage";
 export function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
+      <Route element={<PublicLayout />}>
+        <Route index element={<AgendaPage />} />
+      </Route>
+      <Route path="/admin/login" element={<LoginPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route path="/login" element={<Navigate to="/admin/login" replace />} />
       <Route element={<RequireAuth />}>
-        <Route element={<AppLayout />}>
-          <Route index element={<AgendaPage />} />
-          <Route element={<RequireAdmin />}>
+        <Route element={<RequireAdmin />}>
+          <Route element={<AppLayout />}>
             <Route path="admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="carrinhos" replace />} />
               <Route path="carrinhos" element={<CartsPage />} />

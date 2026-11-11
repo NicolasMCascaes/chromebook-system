@@ -5,7 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApiError } from "./api/client";
 import { AuthProvider } from "./auth/AuthProvider";
 import { App } from "./App";
+import { applyTheme } from "./lib/theme";
 import "./styles.css";
+
+applyTheme();
 
 const queryClient = new QueryClient({
   defaultOptions: {

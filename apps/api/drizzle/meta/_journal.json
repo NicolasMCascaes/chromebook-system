@@ -15,6 +15,20 @@
       "when": 1762905600000,
       "tag": "0001_reservations_blocks_settings",
       "breakpoints": false
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762992000000,
+      "tag": "0002_class_periods",
+      "breakpoints": false
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1763078400000,
+      "tag": "0003_public_reservations",
+      "breakpoints": false
     }
   ]
 }

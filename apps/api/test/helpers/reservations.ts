@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import * as reservationsRoute from "@/app/api/reservations/route";
 import * as cancelRoute from "@/app/api/reservations/[id]/cancel/route";
 import { carts } from "@/lib/db/schema";
@@ -32,23 +32,41 @@ export interface ReservationBody {
   [key: string]: unknown;
 }
 
-export function postReservation(user: TestUser, body: ReservationBody, idempotencyKey: string | null = randomUUID()) {
+export interface Teacher {
+  name: string;
+  cancelToken: string;
+  token?: undefined;
+}
+
+export function newCancelToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+export function createTeacher(name = "Professora Teste"): Teacher {
+  return { name, cancelToken: newCancelToken() };
+}
+
+export function postReservation(actor: Teacher | TestUser, body: ReservationBody, idempotencyKey: string | null = randomUUID()) {
   const headers: Record<string, string> = {};
   if (idempotencyKey) headers["idempotency-key"] = idempotencyKey;
+  const cancelToken = "cancelToken" in actor ? actor.cancelToken : newCancelToken();
   return reservationsRoute.POST(
     apiRequest("/api/reservations", {
       method: "POST",
-      token: user.token,
+      token: actor.token,
       headers,
-      body: { className: "7º A", date: NEXT_TUESDAY, ...body },
+      body: { teacherName: actor.name, className: "7º A", date: NEXT_TUESDAY, cancelToken, ...body },
     }),
     params(),
   );
 }
 
-export function cancelReservationRequest(user: TestUser, id: string, reason?: string) {
+export function cancelReservationRequest(actor: Teacher | TestUser, id: string, reason?: string) {
+  const body: Record<string, string> = {};
+  if (reason) body.reason = reason;
+  if ("cancelToken" in actor) body.cancelToken = actor.cancelToken;
   return cancelRoute.POST(
-    apiRequest(`/api/reservations/${id}/cancel`, { method: "POST", token: user.token, body: reason ? { reason } : {} }),
+    apiRequest(`/api/reservations/${id}/cancel`, { method: "POST", token: actor.token, body }),
     params({ id }),
   );
 }

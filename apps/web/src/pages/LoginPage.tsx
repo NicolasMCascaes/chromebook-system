@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router";
-import { supabase } from "../lib/supabase";
+import { getSupabase } from "../lib/supabase";
+import { env } from "../lib/env";
+import { DevLoginPanel } from "../auth/DevLoginPanel";
 import { useAuth } from "../auth/AuthProvider";
 import { StatusMessage } from "../components/StatusMessage";
 
@@ -18,14 +20,14 @@ export function LoginPage() {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
 
-  if (session) return <Navigate to="/" replace />;
+  if (session) return <Navigate to="/admin" replace />;
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const normalized = email.trim().toLowerCase();
     if (!normalized) return;
     setState({ kind: "sending" });
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await getSupabase().auth.signInWithOtp({
       email: normalized,
       options: {
         shouldCreateUser: false,
@@ -46,10 +48,12 @@ export function LoginPage() {
   return (
     <main className="full-page">
       <section className="card login-card">
-        <h1>Agenda de Chromebooks</h1>
+        <h1>Área da coordenação</h1>
         <p className="muted">Informe seu e-mail institucional para receber um link de acesso.</p>
 
-        {state.kind === "sent" ? (
+        {env.devAuth ? (
+          <DevLoginPanel />
+        ) : state.kind === "sent" ? (
           <StatusMessage kind="success">
             Se <strong>{state.email}</strong> estiver autorizado, você receberá um link de acesso em instantes. Verifique
             também a caixa de spam.

@@ -61,6 +61,13 @@ export interface SchoolHoursDto {
   slotMinutes: number;
 }
 
+export interface ClassPeriodDto {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+}
+
 export interface ReservationDto {
   id: string;
   cartId: string;
@@ -73,7 +80,6 @@ export interface ReservationDto {
   endTime: string;
   status: ReservationStatus;
   notes: string | null;
-  isOwner: boolean;
   canCancel: boolean;
   createdAt: string;
 }
@@ -91,6 +97,7 @@ export interface CalendarDto {
   today: string;
   nowTime: string;
   hours: SchoolHoursDto;
+  periods: ClassPeriodDto[];
   carts: CartDto[];
   reservations: ReservationDto[];
   blocks: CalendarBlockDto[];

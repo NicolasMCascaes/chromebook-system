@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createTestContext, type TestContext } from "./helpers/context";
 
 const PERMISSION_DENIED = "42501";
-const EXPECTED_TABLES = ["calendar_blocks", "carts", "chromebooks", "reservations", "school_settings", "users"];
+const EXPECTED_TABLES = ["calendar_blocks", "carts", "class_periods", "chromebooks", "reservations", "school_settings", "users"];
 
 describe("tabelas de negócio fora da API pública do Supabase", () => {
   let ctx: TestContext;

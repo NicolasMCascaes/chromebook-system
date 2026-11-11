@@ -58,6 +58,28 @@ npm run dev:api   # http://localhost:3001
 npm run dev:web   # http://localhost:5173
 ```
 
+## Modo demonstração (sem Supabase)
+
+Roda API e frontend com dados fictícios. A agenda (`/`) é pública; a área da coordenação (`/admin`) usa um login de desenvolvimento por escolha de usuário, sem e-mail. Usa um banco separado (`chromebook_demo`).
+
+1. Crie o banco: `create database chromebook_demo owner chromebook_dev;`
+2. Copie `apps/api/.env.demo.example` para `apps/api/.env.demo` (defina `DEV_AUTH_SECRET` com 32+ caracteres aleatórios) e `apps/web/.env.demo.example` para `apps/web/.env.demo`.
+3. Aplique as migrations e os dados:
+
+```bash
+npm run db:migrate:demo -w @chromebook/api
+npm run db:seed-demo -w @chromebook/api
+```
+
+4. Em dois terminais:
+
+```bash
+npm run dev:demo -w @chromebook/api
+npm run dev:demo -w @chromebook/web
+```
+
+O login de desenvolvimento só existe quando `DEV_AUTH_SECRET` está definido; a API recusa iniciar com essa variável em produção, e o frontend só ativa o modo em `vite dev`.
+
 ## Testes
 
 Os testes de integração usam um PostgreSQL real local, em um banco dedicado `chromebook_test`. O setup recria o schema `app` a cada execução e se recusa a rodar em bancos cujo nome não termine em `_test`.

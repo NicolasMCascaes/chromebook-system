@@ -110,14 +110,20 @@ const isoDate = z
 const clockTime = (label: string) =>
   z.string({ error: `${label} é obrigatório.` }).regex(TIME_PATTERN, `${label} inválido. Use o formato HH:MM.`);
 
+export const CANCEL_TOKEN_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
+
+const cancelToken = z.string().regex(CANCEL_TOKEN_PATTERN, "Código de cancelamento inválido.");
+
 export const reservationInputSchema = z
   .object({
+    teacherName: requiredText("Nome do professor", 100),
     cartId: z.uuid("Selecione um carrinho."),
     className: requiredText("Turma", 60),
     date: isoDate,
     startTime: clockTime("Horário de início"),
     endTime: clockTime("Horário de término"),
     notes: optionalText("Observação", 500).optional().default(null),
+    cancelToken,
   })
   .refine((value) => timeToMinutes(value.endTime) > timeToMinutes(value.startTime), {
     message: "O horário de término deve ser posterior ao de início.",
@@ -127,6 +133,7 @@ export type ReservationInput = z.input<typeof reservationInputSchema>;
 
 export const reservationCancelSchema = z.object({
   reason: optionalText("Motivo", 300).optional().default(null),
+  cancelToken: cancelToken.optional(),
 });
 export type ReservationCancelInput = z.input<typeof reservationCancelSchema>;
 

@@ -1,35 +1,42 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Session } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "../lib/supabase";
+import { sessionSource } from "./session-source";
+
+interface AuthSession {
+  accessToken: string;
+}
 
 interface AuthContextValue {
-  session: Session | null;
+  session: AuthSession | null;
   loading: boolean;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function toSession(accessToken: string | null): AuthSession | null {
+  return accessToken ? { accessToken } : null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    supabase.auth.getSession().then(({ data }) => {
+    sessionSource.getAccessToken().then((accessToken) => {
       if (!active) return;
-      setSession(data.session);
+      setSession(toSession(accessToken));
       setLoading(false);
     });
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
+    const unsubscribe = sessionSource.onChange((accessToken) => {
+      setSession(toSession(accessToken));
       setLoading(false);
     });
     return () => {
       active = false;
-      data.subscription.unsubscribe();
+      unsubscribe();
     };
   }, []);
 
@@ -38,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       loading,
       signOut: async () => {
-        await supabase.auth.signOut();
+        await sessionSource.signOut();
         queryClient.clear();
       },
     }),

@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router";
 import { useAuth } from "../auth/AuthProvider";
 import { useCurrentUser } from "../auth/guards";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function AppLayout() {
   const user = useCurrentUser();
@@ -14,9 +15,10 @@ export function AppLayout() {
           <NavLink to="/" end>
             Agenda
           </NavLink>
-          {user.role === "ADMIN" && <NavLink to="/admin">Administração</NavLink>}
+          <NavLink to="/admin">Administração</NavLink>
         </nav>
         <div className="user-box">
+          <ThemeToggle />
           <span className="muted">{user.name}</span>
           <button type="button" className="button link" onClick={() => void signOut()}>
             Sair

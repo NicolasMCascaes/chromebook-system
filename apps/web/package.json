@@ -7,22 +7,27 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "dev:demo": "vite --mode demo"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
     "typescript": "6.0",
-    "vite": "8.3"
+    "vite": "8.3",
+    "vitest": "^5.1.0"
   },
   "dependencies": {
     "@chromebook/shared": "^0.0.0",
+    "@fullcalendar/react": "7.1",
     "@supabase/supabase-js": "^2.119.0",
     "@tanstack/react-query": "^5.107.1",
     "react": "19.3",
     "react-dom": "19.3",
     "react-router": "7.18",
+    "temporal-polyfill": "^1.0.8",
     "zod": "^4.6.7"
   }
 }

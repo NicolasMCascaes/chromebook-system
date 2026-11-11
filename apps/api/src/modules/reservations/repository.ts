@@ -1,8 +1,8 @@
 import { and, asc, eq, gte, lte, type SQL } from "drizzle-orm";
 import type { DbExecutor } from "@/lib/db/client";
-import { carts, reservations, users, type ReservationRow } from "@/lib/db/schema";
+import { carts, reservations, type ReservationRow } from "@/lib/db/schema";
 
-export type ReservationView = ReservationRow & { cartName: string; cartColor: string; teacherName: string };
+export type ReservationView = ReservationRow & { cartName: string; cartColor: string };
 
 function selectReservationViews(db: DbExecutor) {
   return db
@@ -10,6 +10,7 @@ function selectReservationViews(db: DbExecutor) {
       id: reservations.id,
       cartId: reservations.cartId,
       userId: reservations.userId,
+      teacherName: reservations.teacherName,
       className: reservations.className,
       reservationDate: reservations.reservationDate,
       startTime: reservations.startTime,
@@ -18,6 +19,7 @@ function selectReservationViews(db: DbExecutor) {
       notes: reservations.notes,
       idempotencyKey: reservations.idempotencyKey,
       requestHash: reservations.requestHash,
+      cancelTokenHash: reservations.cancelTokenHash,
       cancelledAt: reservations.cancelledAt,
       cancelledBy: reservations.cancelledBy,
       cancelReason: reservations.cancelReason,
@@ -25,11 +27,9 @@ function selectReservationViews(db: DbExecutor) {
       updatedAt: reservations.updatedAt,
       cartName: carts.name,
       cartColor: carts.color,
-      teacherName: users.name,
     })
     .from(reservations)
     .innerJoin(carts, eq(carts.id, reservations.cartId))
-    .innerJoin(users, eq(users.id, reservations.userId))
     .$dynamic();
 }
 
@@ -40,12 +40,9 @@ export async function findReservationView(db: DbExecutor, id: string): Promise<R
 
 export async function findReservationByIdempotencyKey(
   db: DbExecutor,
-  userId: string,
   idempotencyKey: string,
 ): Promise<ReservationView | undefined> {
-  const [row] = await selectReservationViews(db).where(
-    and(eq(reservations.userId, userId), eq(reservations.idempotencyKey, idempotencyKey)),
-  );
+  const [row] = await selectReservationViews(db).where(eq(reservations.idempotencyKey, idempotencyKey));
   return row;
 }
 
@@ -71,7 +68,7 @@ export async function insertReservationIfNew(
   const [row] = await db
     .insert(reservations)
     .values(values)
-    .onConflictDoNothing({ target: [reservations.userId, reservations.idempotencyKey] })
+    .onConflictDoNothing({ target: reservations.idempotencyKey })
     .returning({ id: reservations.id });
   return row?.id;
 }
@@ -79,7 +76,7 @@ export async function insertReservationIfNew(
 export async function markReservationCancelled(
   db: DbExecutor,
   id: string,
-  cancellation: { cancelledBy: string; cancelReason: string | null; cancelledAt: Date },
+  cancellation: { cancelledBy: string | null; cancelReason: string | null; cancelledAt: Date },
 ): Promise<boolean> {
   const rows = await db
     .update(reservations)

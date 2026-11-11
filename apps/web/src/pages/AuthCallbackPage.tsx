@@ -11,14 +11,14 @@ export function AuthCallbackPage() {
   const { session, loading } = useAuth();
   const error = callbackError();
 
-  if (session) return <Navigate to="/" replace />;
+  if (session) return <Navigate to="/admin" replace />;
 
   return (
     <main className="full-page">
       {error || !loading ? (
         <>
           <StatusMessage kind="error">O link de acesso é inválido ou expirou. Solicite um novo link.</StatusMessage>
-          <Link to="/login" className="button secondary">
+          <Link to="/admin/login" className="button secondary">
             Voltar para o login
           </Link>
         </>

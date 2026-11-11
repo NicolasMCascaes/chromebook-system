@@ -7,10 +7,12 @@ import { createTestContext, type TestContext, type TestUser } from "./helpers/co
 import { apiRequest, params } from "./helpers/http";
 import {
   cancelReservationRequest,
+  createTeacher,
   LAST_FRIDAY,
   NEXT_TUESDAY,
   postReservation,
   SATURDAY,
+  type Teacher,
   seedCarts,
   SUNDAY,
   TODAY,
@@ -18,8 +20,8 @@ import {
 
 describe("reservas", () => {
   let ctx: TestContext;
-  let professor: TestUser;
-  let otherProfessor: TestUser;
+  let professor: Teacher;
+  let otherProfessor: Teacher;
   let admin: TestUser;
   let cart1: string;
   let cart2: string;
@@ -30,8 +32,8 @@ describe("reservas", () => {
 
   beforeEach(async () => {
     await ctx.reset();
-    professor = await ctx.createUser("PROFESSOR", { name: "Ana Souza" });
-    otherProfessor = await ctx.createUser("PROFESSOR", { name: "Bruno Lima" });
+    professor = createTeacher("Ana Souza");
+    otherProfessor = createTeacher("Bruno Lima");
     admin = await ctx.createUser("ADMIN");
     ({ cart1, cart2 } = await seedCarts(ctx));
   });
@@ -44,13 +46,13 @@ describe("reservas", () => {
   };
 
   describe("criação", () => {
-    it("confirma imediatamente e usa o professor do token, ignorando proprietário enviado no corpo", async () => {
+    it("confirma sem login, grava o nome informado e guarda apenas o hash do código de cancelamento", async () => {
       const response = await postReservation(professor, {
         cartId: cart1,
         startTime: "08:00",
         endTime: "09:40",
         notes: "Aula de pesquisa",
-        userId: otherProfessor.id,
+        userId: admin.id,
       });
 
       expect(response.status).toBe(201);
@@ -65,26 +67,44 @@ describe("reservas", () => {
         endTime: "09:40",
         status: "CONFIRMED",
         notes: "Aula de pesquisa",
-        isOwner: true,
         canCancel: true,
       });
       const [stored] = await ctx.db.select().from(reservations).where(eq(reservations.id, reservation.id));
-      expect(stored!.userId).toBe(professor.id);
+      expect(stored!.userId).toBeNull();
+      expect(stored!.cancelTokenHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(stored!.cancelTokenHash).not.toContain(professor.cancelToken);
     });
 
-    it("não expõe e-mail e oculta a observação para outros professores", async () => {
+    it("exige nome do professor e código de cancelamento válido", async () => {
+      const response = await postReservation(professor, { cartId: cart1, startTime: "08:00", endTime: "09:00", teacherName: " " });
+      expect(response.status).toBe(422);
+      const weakToken = await postReservation(professor, { cartId: cart1, startTime: "08:00", endTime: "09:00", cancelToken: "123" });
+      expect(weakToken.status).toBe(422);
+    });
+
+    it("oculta a observação no acesso público e mostra a quem tem o código", async () => {
       const created = (await (
         await postReservation(professor, { cartId: cart1, startTime: "08:00", endTime: "09:00", notes: "Particular" })
       ).json()) as ReservationDto;
 
-      const asOther = await reservationRoute.GET(
-        apiRequest(`/api/reservations/${created.id}`, { token: otherProfessor.token }),
+      const publicView = await reservationRoute.GET(apiRequest(`/api/reservations/${created.id}`), params({ id: created.id }));
+      expect(await publicView.json()).toMatchObject({ teacherName: "Ana Souza", notes: null });
+
+      const ownerView = await reservationRoute.GET(
+        apiRequest(`/api/reservations/${created.id}`, { headers: { "x-cancel-token": professor.cancelToken } }),
         params({ id: created.id }),
       );
-      const body = (await asOther.json()) as Record<string, unknown>;
+      expect(await ownerView.json()).toMatchObject({ notes: "Particular" });
+    });
 
-      expect(body).toMatchObject({ teacherName: "Ana Souza", notes: null, isOwner: false, canCancel: false });
-      expect(JSON.stringify(body)).not.toContain(professor.email);
+    it("token inválido ou de professor não vale como acesso de administrador", async () => {
+      const legacyProfessor = await ctx.createUser("PROFESSOR");
+      expect((await postReservation(legacyProfessor, { cartId: cart1, startTime: "08:00", endTime: "09:00" })).status).toBe(403);
+      const invalid = await reservationRoute.GET(
+        apiRequest(`/api/reservations/${crypto.randomUUID()}`, { token: "invalido" }),
+        params({ id: crypto.randomUUID() }),
+      );
+      expect(invalid.status).toBe(401);
     });
 
     it.each([
@@ -225,7 +245,7 @@ describe("reservas", () => {
   });
 
   describe("cancelamento", () => {
-    const create = async (user: TestUser, body: { cartId: string; startTime: string; endTime: string; date?: string }) =>
+    const create = async (user: Teacher, body: { cartId: string; startTime: string; endTime: string; date?: string }) =>
       (await (await postReservation(user, body)).json()) as ReservationDto;
 
     it("cancelamento libera o horário para nova reserva", async () => {
@@ -239,7 +259,7 @@ describe("reservas", () => {
       expect((await postReservation(otherProfessor, { cartId: cart1, startTime: "08:00", endTime: "09:00" })).status).toBe(201);
     });
 
-    it("professor não cancela reserva de outro professor", async () => {
+    it("sem o código de cancelamento correto não é possível cancelar", async () => {
       const reservation = await create(professor, { cartId: cart1, startTime: "08:00", endTime: "09:00" });
 
       expect((await cancelReservationRequest(otherProfessor, reservation.id)).status).toBe(403);
@@ -247,7 +267,7 @@ describe("reservas", () => {
       expect(stored!.status).toBe("CONFIRMED");
     });
 
-    it("professor não cancela a própria reserva que já começou", async () => {
+    it("com o código, não cancela reserva que já começou", async () => {
       const reservation = await create(professor, { cartId: cart1, date: TODAY, startTime: "11:00", endTime: "12:00" });
       ctx.clock.set("2030-03-04T14:00:00Z");
 
@@ -297,10 +317,10 @@ describe("reservas", () => {
       expect(await response.json()).toMatchObject({ code: "IDEMPOTENCY_KEY_REUSED" });
     });
 
-    it("chaves iguais de professores diferentes não se confundem", async () => {
+    it("a chave é global: reutilizá-la com outros dados é recusada", async () => {
       const key = crypto.randomUUID();
       expect((await postReservation(professor, { cartId: cart1, startTime: "08:00", endTime: "09:00" }, key)).status).toBe(201);
-      expect((await postReservation(otherProfessor, { cartId: cart2, startTime: "08:00", endTime: "09:00" }, key)).status).toBe(201);
+      expect((await postReservation(otherProfessor, { cartId: cart2, startTime: "08:00", endTime: "09:00" }, key)).status).toBe(422);
     });
 
     it("exige cabeçalho Idempotency-Key válido", async () => {

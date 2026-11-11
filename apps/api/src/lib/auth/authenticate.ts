@@ -32,3 +32,8 @@ export async function authenticateAdmin(request: Request, container: AppContaine
   requireAdmin(user);
   return user;
 }
+
+export async function authenticateAdminIfPresent(request: Request, container: AppContainer): Promise<AuthUser | null> {
+  if (!request.headers.has("authorization")) return null;
+  return authenticateAdmin(request, container);
+}

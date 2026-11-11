@@ -1,6 +1,6 @@
 import type { ApiErrorBody } from "@chromebook/shared";
 import { env } from "../lib/env";
-import { supabase } from "../lib/supabase";
+import { sessionSource } from "../auth/session-source";
 
 export class ApiError extends Error {
   constructor(
@@ -27,10 +27,14 @@ interface RequestOptions {
   headers?: Record<string, string>;
 }
 
+function requiresAuth(path: string): boolean {
+  return path === "/api/me" || path.startsWith("/api/admin/");
+}
+
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { data } = await supabase.auth.getSession();
+  const accessToken = requiresAuth(path) ? await sessionSource.getAccessToken() : null;
   const headers = new Headers(options.headers);
-  if (data.session) headers.set("Authorization", `Bearer ${data.session.access_token}`);
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
 
   let response: Response;

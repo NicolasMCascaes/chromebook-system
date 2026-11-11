@@ -3,13 +3,13 @@ import type { AvailabilityDto, CalendarDto, ReservationDto } from "@chromebook/s
 import * as availabilityRoute from "@/app/api/availability/route";
 import * as calendarRoute from "@/app/api/calendar/route";
 import { calendarBlocks, chromebooks } from "@/lib/db/schema";
-import { createTestContext, type TestContext, type TestUser } from "./helpers/context";
+import { createTestContext, type TestContext } from "./helpers/context";
 import { apiRequest, params } from "./helpers/http";
-import { cancelReservationRequest, NEXT_TUESDAY, postReservation, SATURDAY, seedCarts, TODAY } from "./helpers/reservations";
+import { cancelReservationRequest, createTeacher, NEXT_TUESDAY, postReservation, SATURDAY, seedCarts, TODAY, type Teacher } from "./helpers/reservations";
 
 describe("disponibilidade e agenda", () => {
   let ctx: TestContext;
-  let professor: TestUser;
+  let professor: Teacher;
   let cart1: string;
   let cart2: string;
 
@@ -19,7 +19,7 @@ describe("disponibilidade e agenda", () => {
 
   beforeEach(async () => {
     await ctx.reset();
-    professor = await ctx.createUser("PROFESSOR", { name: "Ana Souza" });
+    professor = createTeacher("Ana Souza");
     ({ cart1, cart2 } = await seedCarts(ctx));
   });
 
@@ -117,11 +117,20 @@ describe("disponibilidade e agenda", () => {
     expect(status).toBe(200);
     expect(body.today).toBe(TODAY);
     expect(body.hours).toEqual({ openingTime: "07:00", closingTime: "18:00", slotMinutes: 5 });
+    expect(body.periods.map(({ name, startTime, endTime }) => `${name} ${startTime}-${endTime}`)).toEqual([
+      "1ª aula 07:20-08:10",
+      "2ª aula 08:10-09:00",
+      "3ª aula 09:00-09:50",
+      "4ª aula 10:10-11:00",
+      "5ª aula 11:00-11:50",
+    ]);
     expect(body.carts.map((cart) => cart.name)).toEqual(["Carrinho 1", "Carrinho 2"]);
     expect(body.reservations).toHaveLength(1);
     expect(body.reservations[0]).toMatchObject({ cartId: cart1, teacherName: "Ana Souza", className: "7º A" });
     expect(body.blocks).toMatchObject([{ kind: "HOLIDAY_NATIONAL", startDate: "2030-03-20" }]);
-    expect(JSON.stringify(body)).not.toContain(professor.email);
+    expect(body.reservations[0]!.notes).toBeNull();
+    expect(JSON.stringify(body)).not.toContain(professor.cancelToken);
+    expect(JSON.stringify(body)).not.toContain("cancelTokenHash");
   });
 
   it("agenda filtra por carrinho e valida o período", async () => {

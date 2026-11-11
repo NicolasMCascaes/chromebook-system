@@ -1,5 +1,5 @@
 const ALLOWED_METHODS = "GET, POST, PATCH, PUT, DELETE, OPTIONS";
-const ALLOWED_HEADERS = "Authorization, Content-Type, Idempotency-Key";
+const ALLOWED_HEADERS = "Authorization, Content-Type, Idempotency-Key, X-Cancel-Token";
 
 export function parseAllowedOrigins(value: string | undefined): string[] {
   return (value ?? "")

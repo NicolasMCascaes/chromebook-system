@@ -32,7 +32,7 @@ export function RequireAuth() {
   }
 
   if (!session || (me.error instanceof ApiError && me.error.status === 401)) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
   }
 
   if (me.error) {
@@ -55,6 +55,16 @@ export function RequireAuth() {
 
 export function RequireAdmin() {
   const user = useCurrentUser();
-  if (user.role !== "ADMIN") return <Navigate to="/" replace />;
+  const { signOut } = useAuth();
+  if (user.role !== "ADMIN") {
+    return (
+      <FullPage>
+        <StatusMessage kind="error">Esta área é exclusiva da coordenação.</StatusMessage>
+        <button type="button" className="button secondary" onClick={() => void signOut()}>
+          Sair
+        </button>
+      </FullPage>
+    );
+  }
   return <Outlet />;
 }

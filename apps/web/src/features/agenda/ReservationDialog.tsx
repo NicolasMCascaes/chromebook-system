@@ -1,0 +1,437 @@
+import { useMemo, useState, type FormEvent } from "react";
+import {
+  isValidIsoDate,
+  reservationInputSchema,
+  type CalendarDto,
+  type ReservationDto,
+  type ReservationInput,
+} from "@chromebook/shared";
+import { useAvailability, useCreateReservation } from "../../api/hooks";
+import { ApiError, errorMessage } from "../../api/client";
+import { Modal } from "../../components/Modal";
+import { FieldError } from "../../components/FieldError";
+import { StatusMessage } from "../../components/StatusMessage";
+import { formatDateLong, formatTimeRange, plural } from "../../lib/format";
+import { zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
+import { lastTeacherName, newCancelToken, rememberReservation, rememberTeacherName } from "../../lib/my-reservations";
+import { describePeriodRange, matchPeriods, overlapsReservation, periodRangeTimes } from "./schedule-model";
+import { cartStyle } from "./cart-style";
+
+export interface ReservationPrefill {
+  date?: string;
+  cartId?: string;
+  startTime?: string;
+  endTime?: string;
+}
+
+type TimeMode = "period" | "custom";
+
+interface FormValues {
+  teacherName: string;
+  className: string;
+  date: string;
+  mode: TimeMode;
+  fromPeriodId: string;
+  toPeriodId: string;
+  startTime: string;
+  endTime: string;
+  cartId: string;
+  notes: string;
+}
+
+type Step =
+  | { kind: "form"; notice?: { kind: "error" | "info"; text: string } }
+  | { kind: "review"; input: ReservationInput; idempotencyKey: string }
+  | { kind: "done"; reservation: ReservationDto };
+
+interface ReservationDialogProps {
+  open: boolean;
+  onClose: () => void;
+  prefill: ReservationPrefill;
+  schedule: Pick<CalendarDto, "periods" | "carts" | "hours" | "today">;
+}
+
+function initialValues(prefill: ReservationPrefill, schedule: ReservationDialogProps["schedule"]): FormValues {
+  const periods = schedule.periods;
+  const matched = prefill.startTime && prefill.endTime ? matchPeriods(periods, prefill.startTime, prefill.endTime) : null;
+  const usePeriods = periods.length > 0 && (matched !== null || !prefill.startTime);
+  return {
+    teacherName: lastTeacherName(),
+    className: "",
+    date: prefill.date ?? schedule.today,
+    mode: usePeriods ? "period" : "custom",
+    fromPeriodId: matched?.fromPeriodId ?? periods[0]?.id ?? "",
+    toPeriodId: matched?.toPeriodId ?? periods[0]?.id ?? "",
+    startTime: prefill.startTime ?? schedule.hours.openingTime,
+    endTime: prefill.endTime ?? "",
+    cartId: prefill.cartId ?? (schedule.carts.length === 1 ? schedule.carts[0]!.id : ""),
+    notes: "",
+  };
+}
+
+function ReservationForm({
+  schedule,
+  prefill,
+  onClose,
+}: Omit<ReservationDialogProps, "open">) {
+  const [values, setValues] = useState<FormValues>(() => initialValues(prefill, schedule));
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [step, setStep] = useState<Step>({ kind: "form" });
+  const create = useCreateReservation();
+
+  const validDate = isValidIsoDate(values.date) ? values.date : null;
+  const availability = useAvailability(validDate);
+  const dayAvailability = availability.data?.date === validDate ? availability.data : undefined;
+
+  const set = <K extends keyof FormValues>(key: K, value: FormValues[K]) =>
+    setValues((current) => ({ ...current, [key]: value }));
+
+  const selectedTimes = useMemo(() => {
+    if (values.mode === "period") {
+      return periodRangeTimes(schedule.periods, { fromPeriodId: values.fromPeriodId, toPeriodId: values.toPeriodId });
+    }
+    return values.startTime && values.endTime ? { startTime: values.startTime, endTime: values.endTime } : null;
+  }, [values.mode, values.fromPeriodId, values.toPeriodId, values.startTime, values.endTime, schedule.periods]);
+
+  function cartAvailabilityText(cartId: string): { text: string; busy: boolean } | null {
+    const cart = dayAvailability?.carts.find((entry) => entry.cartId === cartId);
+    if (!cart) return null;
+    if (cart.block) return { text: "Indisponível nesta data", busy: true };
+    if (!selectedTimes) return null;
+    const busy = overlapsReservation(
+      cart.busy.map((entry) => ({ startTime: entry.start, endTime: entry.end })),
+      selectedTimes.startTime,
+      selectedTimes.endTime,
+    );
+    return busy ? { text: "Ocupado neste horário", busy: true } : { text: "Livre neste horário", busy: false };
+  }
+
+  function handleReview(event: FormEvent) {
+    event.preventDefault();
+    if (values.mode === "period" && !selectedTimes) {
+      setErrors({ endTime: "A aula final deve ser igual ou posterior à aula inicial." });
+      return;
+    }
+    const parsed = reservationInputSchema.safeParse({
+      teacherName: values.teacherName,
+      cartId: values.cartId,
+      className: values.className,
+      date: values.date,
+      startTime: selectedTimes?.startTime ?? "",
+      endTime: selectedTimes?.endTime ?? "",
+      notes: values.notes,
+      cancelToken: newCancelToken(),
+    });
+    if (!parsed.success) {
+      setErrors(zodFieldErrors(parsed.error));
+      return;
+    }
+    setErrors({});
+    create.reset();
+    setStep({ kind: "review", input: parsed.data, idempotencyKey: crypto.randomUUID() });
+  }
+
+  async function handleConfirm(input: ReservationInput, idempotencyKey: string) {
+    try {
+      const reservation = await create.mutateAsync({ input, idempotencyKey });
+      rememberReservation(reservation.id, input.cancelToken);
+      rememberTeacherName(input.teacherName);
+      setStep({ kind: "done", reservation });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        setStep({ kind: "form", notice: { kind: "error", text: error.message } });
+        return;
+      }
+      if (error instanceof ApiError && (error.status === 422 || error.status === 400)) {
+        setErrors(error.fieldErrors());
+        setStep({ kind: "form", notice: { kind: "error", text: error.message } });
+      }
+    }
+  }
+
+  if (step.kind === "done") {
+    const reservation = step.reservation;
+    return (
+      <div className="reservation-done">
+        <StatusMessage kind="success">Reserva confirmada.</StatusMessage>
+        <p className="muted small-text">
+          Se precisar cancelar, abra a reserva na agenda usando este mesmo navegador. Em outro aparelho, peça o
+          cancelamento à coordenação.
+        </p>
+        <ReservationSummary
+          teacherName={reservation.teacherName}
+          className={reservation.className}
+          date={reservation.date}
+          startTime={reservation.startTime}
+          endTime={reservation.endTime}
+          cartName={reservation.cartName}
+          cartColor={reservation.cartColor}
+          notes={reservation.notes}
+          periodsLabel={describePeriodRange(schedule.periods, reservation.startTime, reservation.endTime)}
+        />
+        <div className="actions">
+          <button type="button" className="button primary" onClick={onClose}>
+            Fechar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step.kind === "review") {
+    const cart = schedule.carts.find((entry) => entry.id === step.input.cartId);
+    return (
+      <div className="reservation-review">
+        <p className="muted">Confira os dados antes de confirmar.</p>
+        <ReservationSummary
+          teacherName={step.input.teacherName}
+          className={step.input.className}
+          date={step.input.date}
+          startTime={step.input.startTime}
+          endTime={step.input.endTime}
+          cartName={cart?.name ?? ""}
+          cartColor={cart?.color ?? "#999999"}
+          notes={step.input.notes ?? null}
+          periodsLabel={describePeriodRange(schedule.periods, step.input.startTime, step.input.endTime)}
+        />
+        {cart && (
+          <StatusMessage kind="info">
+            A reserva é do carrinho inteiro. Hoje ele tem{" "}
+            {plural(cart.equipment.available, "Chromebook disponível", "Chromebooks disponíveis")}; essa quantidade pode
+            mudar até a data da aula.
+          </StatusMessage>
+        )}
+        {create.isError && (
+          <StatusMessage kind="error">
+            {errorMessage(create.error)} Ao tentar de novo, a reserva não será duplicada.
+          </StatusMessage>
+        )}
+        <div className="actions">
+          <button type="button" className="button secondary" disabled={create.isPending} onClick={() => setStep({ kind: "form" })}>
+            Voltar e editar
+          </button>
+          <button
+            type="button"
+            className="button primary"
+            disabled={create.isPending}
+            onClick={() => void handleConfirm(step.input, step.idempotencyKey)}
+          >
+            {create.isPending ? "Confirmando…" : "Confirmar reserva"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form className="form reservation-form" onSubmit={handleReview} noValidate>
+      {step.notice && <StatusMessage kind={step.notice.kind}>{step.notice.text}</StatusMessage>}
+
+      <div className="form-grid">
+        <label className="field">
+          <span>Seu nome</span>
+          <input
+            value={values.teacherName}
+            maxLength={100}
+            autoComplete="name"
+            autoFocus={!values.teacherName}
+            onChange={(event) => set("teacherName", event.target.value)}
+          />
+          <FieldError message={errors.teacherName} />
+        </label>
+        <label className="field">
+          <span>Turma</span>
+          <input
+            value={values.className}
+            autoFocus={Boolean(values.teacherName)}
+            maxLength={60}
+            placeholder="Ex.: 7º A"
+            onChange={(event) => set("className", event.target.value)}
+          />
+          <FieldError message={errors.className} />
+        </label>
+        <label className="field">
+          <span>Data</span>
+          <input type="date" value={values.date} min={schedule.today} onChange={(event) => set("date", event.target.value)} />
+          <FieldError message={errors.date} />
+        </label>
+      </div>
+
+      <fieldset className="field-group">
+        <legend>Horário</legend>
+        {schedule.periods.length > 0 && (
+          <div className="segmented" role="radiogroup" aria-label="Forma de escolher o horário">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={values.mode === "period"}
+              className={values.mode === "period" ? "is-active" : undefined}
+              onClick={() => set("mode", "period")}
+            >
+              Por aula
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={values.mode === "custom"}
+              className={values.mode === "custom" ? "is-active" : undefined}
+              onClick={() => set("mode", "custom")}
+            >
+              Outro horário
+            </button>
+          </div>
+        )}
+
+        {values.mode === "period" ? (
+          <div className="form-grid">
+            <label className="field">
+              <span>Da aula</span>
+              <select value={values.fromPeriodId} onChange={(event) => set("fromPeriodId", event.target.value)}>
+                {schedule.periods.map((period) => (
+                  <option key={period.id} value={period.id}>
+                    {period.name} ({period.startTime})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Até a aula</span>
+              <select value={values.toPeriodId} onChange={(event) => set("toPeriodId", event.target.value)}>
+                {schedule.periods.map((period) => (
+                  <option key={period.id} value={period.id}>
+                    {period.name} (até {period.endTime})
+                  </option>
+                ))}
+              </select>
+              <FieldError message={errors.endTime} />
+            </label>
+          </div>
+        ) : (
+          <div className="form-grid">
+            <label className="field">
+              <span>Início</span>
+              <input
+                type="time"
+                step={schedule.hours.slotMinutes * 60}
+                min={schedule.hours.openingTime}
+                max={schedule.hours.closingTime}
+                value={values.startTime}
+                onChange={(event) => set("startTime", event.target.value)}
+              />
+              <FieldError message={errors.startTime} />
+            </label>
+            <label className="field">
+              <span>Término</span>
+              <input
+                type="time"
+                step={schedule.hours.slotMinutes * 60}
+                min={schedule.hours.openingTime}
+                max={schedule.hours.closingTime}
+                value={values.endTime}
+                onChange={(event) => set("endTime", event.target.value)}
+              />
+              <FieldError message={errors.endTime} />
+            </label>
+          </div>
+        )}
+        {selectedTimes && <p className="muted">Horário selecionado: {formatTimeRange(selectedTimes.startTime, selectedTimes.endTime)}</p>}
+        <p className="muted small-text">
+          Funcionamento: {formatTimeRange(schedule.hours.openingTime, schedule.hours.closingTime)}
+        </p>
+      </fieldset>
+
+      <fieldset className="field-group">
+        <legend>Carrinho</legend>
+        {schedule.carts.length === 0 ? (
+          <StatusMessage kind="empty">Nenhum carrinho disponível para reserva.</StatusMessage>
+        ) : (
+          <div className="cart-options">
+            {schedule.carts.map((cart) => {
+              const status = cartAvailabilityText(cart.id);
+              return (
+                <label key={cart.id} className="cart-option" style={cartStyle(cart.color)}>
+                  <input
+                    type="radio"
+                    name="cartId"
+                    value={cart.id}
+                    checked={values.cartId === cart.id}
+                    onChange={() => set("cartId", cart.id)}
+                  />
+                  <span className="cart-option-body">
+                    <strong>{cart.name}</strong>
+                    <span className="muted">
+                      {plural(cart.equipment.available, "Chromebook disponível", "Chromebooks disponíveis")}
+                    </span>
+                    {status && <span className={status.busy ? "cart-status is-busy" : "cart-status is-free"}>{status.text}</span>}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+        <FieldError message={errors.cartId} />
+      </fieldset>
+
+      <label className="field">
+        <span>Observação (opcional)</span>
+        <textarea rows={2} maxLength={500} value={values.notes} onChange={(event) => set("notes", event.target.value)} />
+        <FieldError message={errors.notes} />
+      </label>
+
+      <div className="actions">
+        <button type="button" className="button secondary" onClick={onClose}>
+          Cancelar
+        </button>
+        <button type="submit" className="button primary">
+          Revisar reserva
+        </button>
+      </div>
+    </form>
+  );
+}
+
+interface SummaryProps {
+  teacherName: string;
+  className: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  cartName: string;
+  cartColor: string;
+  notes: string | null;
+  periodsLabel: string | null;
+}
+
+export function ReservationSummary(props: SummaryProps) {
+  return (
+    <dl className="summary" style={cartStyle(props.cartColor)}>
+      <dt>Professor</dt>
+      <dd>{props.teacherName}</dd>
+      <dt>Turma</dt>
+      <dd>{props.className}</dd>
+      <dt>Data</dt>
+      <dd>{formatDateLong(props.date)}</dd>
+      <dt>Horário</dt>
+      <dd>
+        {formatTimeRange(props.startTime, props.endTime)}
+        {props.periodsLabel && <span className="muted"> ({props.periodsLabel})</span>}
+      </dd>
+      <dt>Carrinho</dt>
+      <dd className="summary-cart">{props.cartName}</dd>
+      {props.notes && (
+        <>
+          <dt>Observação</dt>
+          <dd>{props.notes}</dd>
+        </>
+      )}
+    </dl>
+  );
+}
+
+export function ReservationDialog(props: ReservationDialogProps) {
+  return (
+    <Modal open={props.open} title="Nova reserva" onClose={props.onClose}>
+      <ReservationForm schedule={props.schedule} prefill={props.prefill} onClose={props.onClose} />
+    </Modal>
+  );
+}

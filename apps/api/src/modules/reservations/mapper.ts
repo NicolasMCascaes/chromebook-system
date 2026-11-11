@@ -1,16 +1,16 @@
 import { normalizeTime, type ReservationDto, type SchoolNow } from "@chromebook/shared";
-import type { AuthUser } from "@/lib/auth/authenticate";
 import type { ReservationView } from "./repository";
 import { startsInFuture } from "./rules";
 
-export function canCancelReservation(view: ReservationView, viewer: AuthUser, now: SchoolNow): boolean {
+export type ReservationAudience = "public" | "owner" | "admin";
+
+export function canCancelReservation(view: ReservationView, audience: ReservationAudience, now: SchoolNow): boolean {
   if (view.status !== "CONFIRMED") return false;
-  if (viewer.role === "ADMIN") return true;
-  return view.userId === viewer.id && startsInFuture(view.reservationDate, view.startTime, now);
+  if (audience === "admin") return true;
+  return startsInFuture(view.reservationDate, view.startTime, now);
 }
 
-export function toReservationDto(view: ReservationView, viewer: AuthUser, now: SchoolNow): ReservationDto {
-  const isOwner = view.userId === viewer.id;
+export function toReservationDto(view: ReservationView, audience: ReservationAudience, now: SchoolNow): ReservationDto {
   return {
     id: view.id,
     cartId: view.cartId,
@@ -22,9 +22,8 @@ export function toReservationDto(view: ReservationView, viewer: AuthUser, now: S
     startTime: normalizeTime(view.startTime),
     endTime: normalizeTime(view.endTime),
     status: view.status,
-    notes: isOwner || viewer.role === "ADMIN" ? view.notes : null,
-    isOwner,
-    canCancel: canCancelReservation(view, viewer, now),
+    notes: audience === "public" ? null : view.notes,
+    canCancel: canCancelReservation(view, audience, now),
     createdAt: view.createdAt.toISOString(),
   };
 }

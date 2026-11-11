@@ -10,21 +10,21 @@ import {
   type CalendarDto,
 } from "@chromebook/shared";
 import type { AppContainer } from "@/lib/container";
-import type { AuthUser } from "@/lib/auth/authenticate";
-import { getSchoolHours } from "@/modules/settings/repository";
+import { getSchoolHours, listClassPeriods } from "@/modules/settings/repository";
 import { listBlocksInRange, toCalendarBlockDto } from "@/modules/blocks/repository";
 import { listCarts } from "@/modules/carts/service";
 import { listConfirmedReservations } from "@/modules/reservations/repository";
-import { toReservationDto } from "@/modules/reservations/mapper";
+import { toReservationDto, type ReservationAudience } from "@/modules/reservations/mapper";
 
 export async function getCalendar(
   container: AppContainer,
-  user: AuthUser,
+  audience: ReservationAudience,
   query: { from: string; to: string; cartId?: string },
 ): Promise<CalendarDto> {
   const now = schoolNow(container.clock.now());
-  const [hours, carts, reservations, blocks] = await Promise.all([
+  const [hours, periods, carts, reservations, blocks] = await Promise.all([
     getSchoolHours(container.db),
+    listClassPeriods(container.db),
     listCarts(container, { onlyActive: true }),
     listConfirmedReservations(container.db, query),
     listBlocksInRange(container.db, query),
@@ -33,8 +33,9 @@ export async function getCalendar(
     today: now.date,
     nowTime: now.time,
     hours,
+    periods,
     carts,
-    reservations: reservations.map((view) => toReservationDto(view, user, now)),
+    reservations: reservations.map((view) => toReservationDto(view, audience, now)),
     blocks: blocks.map(toCalendarBlockDto),
   };
 }
