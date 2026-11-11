@@ -658,3 +658,24 @@ tbody tr:last-child td {
   align-items: center;
   gap: 8px;
 }
+
+.class-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.class-picker legend {
+  padding: 0 4px;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.grade-note {
+  grid-column: 1 / -1;
+  margin: 0;
+}

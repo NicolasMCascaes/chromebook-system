@@ -57,6 +57,13 @@
       "when": 1763424000000,
       "tag": "0007_reservation_approval",
       "breakpoints": false
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1763510400000,
+      "tag": "0008_schedule_classes",
+      "breakpoints": false
     }
   ]
 }

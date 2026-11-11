@@ -255,6 +255,7 @@ export const schoolSettingsInputSchema = z
       .array(
         z.object({
           name: requiredText("Nome da grade", 60),
+          classNames: z.array(schoolClass).default([]),
           periods: z.array(classPeriodInputSchema).max(MAX_CLASS_PERIODS, `Cadastre no máximo ${MAX_CLASS_PERIODS} aulas por grade.`),
         }),
       )
@@ -275,7 +276,18 @@ export const schoolSettingsInputSchema = z
       });
     }
     const names = value.schedules.map((schedule) => schedule.name.toLocaleLowerCase("pt-BR"));
+    const assigned = new Set<string>();
     value.schedules.forEach((schedule, scheduleIndex) => {
+      for (const className of schedule.classNames) {
+        if (assigned.has(className)) {
+          context.addIssue({
+            code: "custom",
+            message: `${className} já está em outra grade.`,
+            path: ["schedules", scheduleIndex, "classNames"],
+          });
+        }
+        assigned.add(className);
+      }
       if (names.indexOf(names[scheduleIndex]!) !== scheduleIndex) {
         context.addIssue({ code: "custom", message: "Há grades com o mesmo nome.", path: ["schedules", scheduleIndex, "name"] });
       }

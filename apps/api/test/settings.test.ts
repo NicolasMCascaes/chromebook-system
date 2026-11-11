@@ -57,6 +57,10 @@ describe("configurações da escola", () => {
       "Demais turmas: 5",
     ]);
     expect(body.publicAccessCode).toBe(TEST_ACCESS_CODE);
+    expect(body.schedules.map((schedule) => schedule.classNames)).toEqual([
+      ["6º A", "6º B", "7º ano"],
+      ["5º A", "5º B", "8º A", "8º B", "9º ano"],
+    ]);
   });
 
   it("salva horário, e-mails e aulas, e a agenda passa a usá-los", async () => {
@@ -119,6 +123,22 @@ describe("configurações da escola", () => {
     const period = { name: "1ª aula", startTime: "07:20", endTime: "08:10" };
     const response = await save(validInput({ schedules: [{ name: "Grade A", periods: [period] }, { name: "Grade B", periods: [period] }] }));
     expect(response.status).toBe(200);
+  });
+
+  it("guarda as turmas de cada grade e não deixa a mesma turma em duas grades", async () => {
+    const period = { name: "1ª aula", startTime: "07:20", endTime: "08:10" };
+    const saved = await save(
+      validInput({ schedules: [{ name: "Grade A", classNames: ["5º A"], periods: [period] }, { name: "Grade B", classNames: ["9º ano"], periods: [period] }] }),
+    );
+    expect(((await saved.json()) as SchoolSettingsMutationDto).settings.schedules.map((schedule) => schedule.classNames)).toEqual([["5º A"], ["9º ano"]]);
+
+    const duplicated = await save(
+      validInput({ schedules: [{ name: "Grade A", classNames: ["5º A"], periods: [period] }, { name: "Grade B", classNames: ["5º A"], periods: [period] }] }),
+    );
+    expect(duplicated.status).toBe(422);
+    expect(await duplicated.json()).toMatchObject({ details: [{ path: "schedules.1.classNames", message: "5º A já está em outra grade." }] });
+
+    expect((await save(validInput({ schedules: [{ name: "Grade A", classNames: ["1º EM"], periods: [period] }] }))).status).toBe(422);
   });
 
   it("exige administrador", async () => {

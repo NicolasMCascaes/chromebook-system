@@ -120,7 +120,9 @@ export async function createTestContext() {
         notification_emails = '{}', public_access_code = '${TEST_ACCESS_CODE}';
       delete from app.class_periods;
       delete from app.class_schedules;
-      insert into app.class_schedules (name, display_order) values ('6º A, 6º B e 7º ano', 1), ('Demais turmas', 2);
+      insert into app.class_schedules (name, display_order, class_names) values
+        ('6º A, 6º B e 7º ano', 1, '{"6º A","6º B","7º ano"}'),
+        ('Demais turmas', 2, '{"5º A","5º B","8º A","8º B","9º ano"}');
       insert into app.class_periods (schedule_id, name, start_time, end_time)
       select s.id, v.name, v.start_time::time, v.end_time::time
       from app.class_schedules s

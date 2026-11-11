@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import {
+  SCHOOL_CLASSES,
   MAX_CLASS_PERIODS,
   MAX_CLASS_SCHEDULES,
   minutesToTime,
@@ -27,6 +28,7 @@ interface PeriodRow {
 interface ScheduleRow {
   key: number;
   name: string;
+  classNames: string[];
   periods: PeriodRow[];
 }
 
@@ -113,6 +115,7 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
     settings.schedules.map((schedule, scheduleIndex) => ({
       key: scheduleIndex,
       name: schedule.name,
+      classNames: schedule.classNames,
       periods: schedule.periods.map((period, periodIndex) => ({ key: scheduleIndex * 100 + periodIndex, ...period })),
     })),
   );
@@ -152,7 +155,7 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
 
   function addSchedule() {
     const key = takeKey();
-    setSchedules((current) => [...current, { key, name: "", periods: [] }]);
+    setSchedules((current) => [...current, { key, name: "", classNames: [], periods: [] }]);
   }
 
   function describeRisks(input: { openingTime: string; closingTime: string; notificationEmails: string[]; schedules: { name: string; periods: unknown[] }[] }): string[] {
@@ -189,6 +192,7 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
         .filter(Boolean),
       schedules: schedules.map((schedule) => ({
         name: schedule.name,
+        classNames: schedule.classNames,
         periods: schedule.periods.map(({ name, startTime, endTime }) => ({ name, startTime, endTime })),
       })),
     });
@@ -248,14 +252,14 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
       <section className="card form">
         <h2>Grades de aulas</h2>
         <p className="muted small-text">
-          Cada grade tem as próprias aulas e intervalos. Ao reservar por aula, o professor escolhe a grade da turma.
+          Cada grade tem as próprias aulas e intervalos. Ao reservar por aula, a grade é escolhida pela turma marcada abaixo.
         </p>
         {schedules.length === 0 && <StatusMessage kind="empty">Nenhuma grade cadastrada.</StatusMessage>}
         {schedules.map((schedule, scheduleIndex) => (
           <div key={schedule.key} className="stack schedule-card">
             <div className="schedule-header">
               <label className="field">
-                <span>Turmas desta grade</span>
+                <span>Nome da grade</span>
                 <input
                   value={schedule.name}
                   maxLength={60}
@@ -272,6 +276,31 @@ function SettingsForm({ settings }: { settings: SchoolSettingsDto }) {
                 Remover grade
               </button>
             </div>
+            <fieldset className="class-picker">
+              <legend>Turmas que usam esta grade (escolhida automaticamente ao reservar)</legend>
+              {SCHOOL_CLASSES.map((schoolClass) => {
+                const owner = schedules.find((item) => item.key !== schedule.key && item.classNames.includes(schoolClass));
+                return (
+                  <label key={schoolClass} className="field checkbox" title={owner ? `Já está em ${owner.name}` : undefined}>
+                    <input
+                      type="checkbox"
+                      checked={schedule.classNames.includes(schoolClass)}
+                      disabled={Boolean(owner)}
+                      onChange={(event) =>
+                        updateSchedule(schedule.key, (current) => ({
+                          ...current,
+                          classNames: event.target.checked
+                            ? SCHOOL_CLASSES.filter((item) => item === schoolClass || current.classNames.includes(item))
+                            : current.classNames.filter((item) => item !== schoolClass),
+                        }))
+                      }
+                    />
+                    <span>{schoolClass}</span>
+                  </label>
+                );
+              })}
+              <FieldError message={errors[`schedules.${scheduleIndex}.classNames`]} />
+            </fieldset>
             {schedule.periods.map((period, periodIndex) => (
               <div key={period.key} className="period-row">
                 <label className="field">

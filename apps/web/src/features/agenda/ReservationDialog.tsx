@@ -93,10 +93,17 @@ function ReservationForm({
 
   const schedules = schedule.schedules.filter((entry) => entry.periods.length > 0);
   const periods = schedules.find((entry) => entry.id === values.scheduleId)?.periods ?? [];
+  const classSchedule = schedules.find((entry) => entry.classNames.includes(values.className));
 
   function selectSchedule(scheduleId: string) {
     const firstPeriod = schedules.find((entry) => entry.id === scheduleId)?.periods[0]?.id ?? "";
     setValues((current) => ({ ...current, scheduleId, fromPeriodId: firstPeriod, toPeriodId: firstPeriod }));
+  }
+
+  function selectClass(className: string) {
+    const target = schedules.find((entry) => entry.classNames.includes(className));
+    set("className", className);
+    if (target && target.id !== values.scheduleId) selectSchedule(target.id);
   }
 
   const selectedTimes = useMemo(() => {
@@ -263,7 +270,7 @@ function ReservationForm({
           <select
             value={values.className}
             autoFocus={Boolean(values.teacherName)}
-            onChange={(event) => set("className", event.target.value)}
+            onChange={(event) => selectClass(event.target.value)}
           >
             <option value="" disabled>
               Selecione a turma
@@ -310,7 +317,12 @@ function ReservationForm({
 
         {values.mode === "period" ? (
           <div className="form-grid">
-            {schedules.length > 1 && (
+            {classSchedule && (
+              <p className="grade-note muted small-text">
+                Aulas da grade <strong>{classSchedule.name}</strong>, definida pela turma.
+              </p>
+            )}
+            {!classSchedule && schedules.length > 1 && (
               <label className="field full">
                 <span>Horário da turma</span>
                 <select value={values.scheduleId} onChange={(event) => selectSchedule(event.target.value)}>

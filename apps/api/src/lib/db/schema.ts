@@ -110,6 +110,7 @@ export const classSchedules = app.table("class_schedules", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   displayOrder: smallint("display_order").notNull().default(0),
+  classNames: text("class_names").array().notNull().default(sql`'{}'`),
   ...timestamps,
 });
 

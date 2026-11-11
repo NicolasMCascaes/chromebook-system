@@ -23,6 +23,7 @@ export async function listClassSchedules(db: DbExecutor): Promise<ClassScheduleD
   return schedules.map((schedule) => ({
     id: schedule.id,
     name: schedule.name,
+    classNames: schedule.classNames,
     periods: periods
       .filter((period) => period.scheduleId === schedule.id)
       .map((period) => ({
@@ -68,14 +69,14 @@ export async function updateSchoolSettings(
 
 export async function replaceClassSchedules(
   db: DbExecutor,
-  schedules: { name: string; periods: { name: string; startTime: string; endTime: string }[] }[],
+  schedules: { name: string; classNames: string[]; periods: { name: string; startTime: string; endTime: string }[] }[],
 ): Promise<void> {
   await db.delete(classPeriods);
   await db.delete(classSchedules);
   for (const [index, schedule] of schedules.entries()) {
     const [row] = await db
       .insert(classSchedules)
-      .values({ name: schedule.name, displayOrder: index + 1 })
+      .values({ name: schedule.name, classNames: schedule.classNames, displayOrder: index + 1 })
       .returning({ id: classSchedules.id });
     if (schedule.periods.length > 0) {
       await db.insert(classPeriods).values(schedule.periods.map((period) => ({ ...period, scheduleId: row!.id })));

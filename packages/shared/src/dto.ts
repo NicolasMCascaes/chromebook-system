@@ -71,6 +71,7 @@ export interface ClassPeriodDto {
 export interface ClassScheduleDto {
   id: string;
   name: string;
+  classNames: string[];
   periods: ClassPeriodDto[];
 }
 

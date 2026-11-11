@@ -126,6 +126,7 @@ describe("grades de horário", () => {
   const SIXTH: ClassScheduleDto = {
     id: "s1",
     name: "6º A, 6º B e 7º ano",
+    classNames: ["6º A", "6º B", "7º ano"],
     periods: [
       { id: "a1", name: "1ª aula", startTime: "07:20", endTime: "08:10" },
       { id: "a2", name: "2ª aula", startTime: "08:10", endTime: "09:00" },
@@ -133,7 +134,7 @@ describe("grades de horário", () => {
       { id: "a4", name: "4ª aula", startTime: "10:10", endTime: "11:00" },
     ],
   };
-  const OTHERS: ClassScheduleDto = { id: "s2", name: "Demais turmas", periods: PERIODS };
+  const OTHERS: ClassScheduleDto = { id: "s2", name: "Demais turmas", classNames: ["8º A"], periods: PERIODS };
 
   it("descreve o horário pela grade que o contém", () => {
     expect(describeWithSchedules([SIXTH, OTHERS], "09:20", "10:10")).toBe("3ª aula, 6º A, 6º B e 7º ano");
