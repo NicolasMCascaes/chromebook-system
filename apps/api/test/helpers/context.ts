@@ -16,8 +16,10 @@ export const TEST_CRON_SECRET = "test-cron-secret-0123456789abcdefghij";
 
 export class FakeAuthAdminGateway implements AuthAdminGateway {
   readonly idsByEmail = new Map<string, string>();
+  readonly passwordsByEmail = new Map<string, string>();
 
-  async ensureUser(email: string): Promise<string> {
+  async ensureUser(email: string, password: string): Promise<string> {
+    this.passwordsByEmail.set(email, password);
     const existing = this.idsByEmail.get(email);
     if (existing) return existing;
     const id = randomUUID();

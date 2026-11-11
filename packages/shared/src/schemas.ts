@@ -101,10 +101,18 @@ const emailAddress = z
   .toLowerCase()
   .pipe(z.email("E-mail inválido.").max(254, "E-mail muito longo."));
 
+export const PASSWORD_MIN_LENGTH = 10;
+
+export const passwordSchema = z
+  .string({ error: "Informe a senha." })
+  .min(PASSWORD_MIN_LENGTH, `A senha deve ter pelo menos ${PASSWORD_MIN_LENGTH} caracteres.`)
+  .max(72, "A senha deve ter no máximo 72 caracteres.");
+
 export const userInputSchema = z.object({
   email: emailAddress,
   name: requiredText("Nome", 100),
   role: userRole.default("PROFESSOR"),
+  password: passwordSchema,
 });
 export type UserInput = z.input<typeof userInputSchema>;
 

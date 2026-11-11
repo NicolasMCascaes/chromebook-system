@@ -87,7 +87,7 @@ describe("permissões de professor e administrador", () => {
       name: "POST /admin/users",
       call: () =>
         adminUsers.POST(
-          apiRequest("/api/admin/users", { method: "POST", token, body: { email: "novo@escola.test", name: "Novo" } }),
+          apiRequest("/api/admin/users", { method: "POST", token, body: { email: "novo@escola.test", name: "Novo", password: "senha-segura-123" } }),
           params(),
         ),
     },

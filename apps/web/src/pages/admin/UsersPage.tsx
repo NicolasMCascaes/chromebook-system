@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { USER_ROLE_LABELS, userInputSchema, type UserDto } from "@chromebook/shared";
+import { USER_ROLE_LABELS, PASSWORD_MIN_LENGTH, userInputSchema, type UserDto } from "@chromebook/shared";
 import { useAdminUsers, useAuthorizeUser, useUpdateUser } from "../../api/hooks";
 import { errorMessage } from "../../api/client";
 import { useCurrentUser } from "../../auth/guards";
@@ -8,7 +8,7 @@ import { FieldError } from "../../components/FieldError";
 import { apiFieldErrors, zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
 
 function AuthorizeUserForm({ onDone }: { onDone: (message: string) => void }) {
-  const [values, setValues] = useState({ email: "", name: "" });
+  const [values, setValues] = useState({ email: "", name: "", password: "" });
   const [errors, setErrors] = useState<FieldErrors>({});
   const authorize = useAuthorizeUser();
 
@@ -22,8 +22,8 @@ function AuthorizeUserForm({ onDone }: { onDone: (message: string) => void }) {
     setErrors({});
     try {
       const user = await authorize.mutateAsync(parsed.data);
-      setValues({ email: "", name: "" });
-      onDone(`${user.email} autorizado. A pessoa já pode solicitar o link de acesso.`);
+      setValues({ email: "", name: "", password: "" });
+      onDone(`${user.email} autorizado. Passe a senha inicial para a pessoa entrar na área do TI.`);
     } catch (error) {
       setErrors(apiFieldErrors(error));
     }
@@ -51,6 +51,17 @@ function AuthorizeUserForm({ onDone }: { onDone: (message: string) => void }) {
             onChange={(event) => setValues((current) => ({ ...current, name: event.target.value }))}
           />
           <FieldError message={errors.name} />
+        </label>
+        <label className="field">
+          <span>Senha inicial (mínimo {PASSWORD_MIN_LENGTH} caracteres)</span>
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={values.password}
+            maxLength={72}
+            onChange={(event) => setValues((current) => ({ ...current, password: event.target.value }))}
+          />
+          <FieldError message={errors.password} />
         </label>
       </div>
       {authorize.isError && <StatusMessage kind="error">{errorMessage(authorize.error)}</StatusMessage>}

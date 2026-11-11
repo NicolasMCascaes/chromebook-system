@@ -12,9 +12,14 @@ const { values } = parseArgs({
   },
 });
 
-const parsed = userInputSchema.safeParse({ email: values.email, name: values.name, role: "ADMIN" });
+const parsed = userInputSchema.safeParse({
+  email: values.email,
+  name: values.name,
+  role: "ADMIN",
+  password: process.env.ADMIN_PASSWORD,
+});
 if (!parsed.success) {
-  console.error("Uso: npm run create-admin -w @chromebook/api -- --email admin@escola.com --name \"Nome\"");
+  console.error("Uso: ADMIN_PASSWORD='...' npm run create-admin -w @chromebook/api -- --email admin@escola.com --name \"Nome\"");
   for (const issue of parsed.error.issues) console.error(`- ${issue.path.join(".")}: ${issue.message}`);
   process.exit(1);
 }
@@ -27,7 +32,7 @@ try {
     createSupabaseAdminClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY),
     db,
   );
-  const authUserId = await gateway.ensureUser(parsed.data.email);
+  const authUserId = await gateway.ensureUser(parsed.data.email, parsed.data.password);
   await db
     .insert(users)
     .values({ id: authUserId, email: parsed.data.email, name: parsed.data.name, role: "ADMIN", active: true })
@@ -35,7 +40,7 @@ try {
       target: users.email,
       set: { name: parsed.data.name, role: "ADMIN", active: true },
     });
-  console.log(`Administrador ${parsed.data.email} pronto. Ele já pode entrar pelo link enviado ao e-mail.`);
+  console.log(`Administrador ${parsed.data.email} pronto. Ele já pode entrar com e-mail e senha na área do TI.`);
 } finally {
   await client.end();
 }

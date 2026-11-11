@@ -18,8 +18,8 @@ npm install
 
 ## Configuração do Supabase
 
-1. **Authentication → Sign In / Providers**: desative "Allow new users to sign up". Só entram e-mails autorizados pelo administrador.
-2. **Authentication → URL Configuration**: em *Site URL* e *Redirect URLs*, cadastre a origem do frontend e `/auth/callback`. Exemplo: `http://localhost:5173/auth/callback`.
+1. **Authentication → Sign In / Providers**: desative "Allow new users to sign up" e mantenha o provedor *Email* ativo. O TI entra com e-mail e senha; só existem as contas criadas pelo administrador.
+2. **Authentication → URL Configuration**: em *Site URL*, cadastre a origem do frontend.
 3. **Project Settings → JWT Keys**: use as chaves de assinatura assimétricas (padrão em projetos novos). A API valida o token pelo JWKS do projeto.
 4. **Data API**: não adicione o schema `app` aos *Exposed schemas*. As tabelas de negócio ficam acessíveis apenas pela API.
 
@@ -72,10 +72,10 @@ Usa `DIRECT_DATABASE_URL` (conexão de sessão, porta 5432) se existir; caso con
 Não há usuário nem senha padrão no código. Com `apps/api/.env` preenchido e as migrations aplicadas:
 
 ```bash
-npm run create-admin -w @chromebook/api -- --email admin@escola.com.br --name "Nome do Administrador"
+ADMIN_PASSWORD='senha-com-10-ou-mais-caracteres' npm run create-admin -w @chromebook/api -- --email admin@escola.com.br --name "Nome do Administrador"
 ```
 
-O script cria a conta no Supabase Auth (sem senha) e registra o perfil `ADMIN` em `app.users`. Depois, o administrador entra pela tela de login com o link enviado ao e-mail e autoriza os demais usuários em **Administração → Usuários**.
+A senha vem da variável `ADMIN_PASSWORD` para não ficar nos argumentos do comando. O script cria a conta no Supabase Auth com e-mail confirmado e registra o perfil `ADMIN` em `app.users`; rodar de novo com o mesmo e-mail redefine a senha. Os demais usuários do TI são criados em **Administração do TI → Usuários**, com uma senha inicial.
 
 ## Desenvolvimento
 

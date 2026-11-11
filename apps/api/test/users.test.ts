@@ -28,16 +28,25 @@ describe("autorização de e-mails pelo administrador", () => {
     adminUser.PATCH(apiRequest(`/api/admin/users/${id}`, { method: "PATCH", token: admin.token, body }), params({ id }));
 
   it("autoriza e-mail normalizado como professor e provisiona a conta no Supabase Auth", async () => {
-    const response = await authorize({ email: "  Maria.Silva@Escola.Test ", name: "Maria Silva" });
+    const response = await authorize({ email: "  Maria.Silva@Escola.Test ", name: "Maria Silva", password: "senha-segura-123" });
 
     expect(response.status).toBe(201);
     const user = (await response.json()) as UserDto;
     expect(user).toMatchObject({ email: "maria.silva@escola.test", role: "PROFESSOR", active: true });
     expect(ctx.authAdmin.idsByEmail.get("maria.silva@escola.test")).toBe(user.id);
+    expect(ctx.authAdmin.passwordsByEmail.get("maria.silva@escola.test")).toBe("senha-segura-123");
+    expect(JSON.stringify(user)).not.toContain("senha-segura-123");
+  });
+
+  it("exige senha inicial com pelo menos 10 caracteres", async () => {
+    expect((await authorize({ email: "ana@escola.test", name: "Ana" })).status).toBe(422);
+    const short = await authorize({ email: "ana@escola.test", name: "Ana", password: "curta" });
+    expect(short.status).toBe(422);
+    expect(await short.json()).toMatchObject({ details: [{ path: "password" }] });
   });
 
   it("o usuário autorizado consegue acessar com o token do Supabase", async () => {
-    const user = (await (await authorize({ email: "joao@escola.test", name: "João" })).json()) as UserDto;
+    const user = (await (await authorize({ email: "joao@escola.test", name: "João", password: "senha-segura-123" })).json()) as UserDto;
 
     const response = await meRoute.GET(apiRequest("/api/me", { token: await ctx.token(user.id) }), params());
 
@@ -45,13 +54,13 @@ describe("autorização de e-mails pelo administrador", () => {
   });
 
   it("recusa e-mail já autorizado com 409", async () => {
-    await authorize({ email: "joao@escola.test", name: "João" });
+    await authorize({ email: "joao@escola.test", name: "João", password: "senha-segura-123" });
 
-    expect((await authorize({ email: "JOAO@escola.test", name: "Outro" })).status).toBe(409);
+    expect((await authorize({ email: "JOAO@escola.test", name: "Outro", password: "senha-segura-123" })).status).toBe(409);
   });
 
   it("recusa e-mail inválido com 422", async () => {
-    expect((await authorize({ email: "joao", name: "João" })).status).toBe(422);
+    expect((await authorize({ email: "joao", name: "João", password: "senha-segura-123" })).status).toBe(422);
   });
 
   it("desativar um professor bloqueia o acesso dele", async () => {

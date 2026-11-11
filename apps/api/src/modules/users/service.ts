@@ -20,7 +20,7 @@ export async function authorizeUser(
   if (await findUserByEmail(container.db, input.email)) {
     throw AppError.conflict(EMAIL_ALREADY_AUTHORIZED);
   }
-  const authUserId = await container.authAdmin.ensureUser(input.email);
+  const authUserId = await container.authAdmin.ensureUser(input.email, input.password);
   try {
     const row = await insertUser(container.db, {
       id: authUserId,

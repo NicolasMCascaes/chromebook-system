@@ -31,7 +31,7 @@ export function signDevToken(secret: string, userId: string): Promise<string> {
 export class DevAuthAdminGateway implements AuthAdminGateway {
   constructor(private readonly db: Database) {}
 
-  async ensureUser(email: string): Promise<string> {
+  async ensureUser(email: string, _password: string): Promise<string> {
     const [existing] = await this.db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     return existing?.id ?? randomUUID();
   }
