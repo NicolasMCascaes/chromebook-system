@@ -1,7 +1,15 @@
+import { schoolNow, type FailedNotificationDto } from "@chromebook/shared";
 import type { AppContainer } from "@/lib/container";
+import { AppError } from "@/lib/http/errors";
 import type { NotificationRow } from "@/lib/db/schema";
 import type { EmailMessage } from "@/lib/email/sender";
-import { claimDueNotifications, markNotificationFailed, markNotificationSent } from "./repository";
+import {
+  claimDueNotifications,
+  listFailedNotifications,
+  markNotificationFailed,
+  markNotificationSent,
+  requeueFailedNotification,
+} from "./repository";
 
 const BATCH_SIZE = 20;
 const LEASE_MINUTES = 5;
@@ -97,4 +105,38 @@ export function scheduleNotificationDispatch(container: AppContainer): void {
       console.error("Falha ao processar notificações pendentes", sanitizeError(error));
     }
   });
+}
+
+export async function listUpcomingFailedNotifications(container: AppContainer): Promise<FailedNotificationDto[]> {
+  const today = schoolNow(container.clock.now()).date;
+  const rows = await listFailedNotifications(container.db, { fromDate: today });
+  return rows.map((row) => ({
+    id: row.id,
+    recipient: row.recipient,
+    attempts: row.attempts,
+    lastError: row.lastError,
+    failedAt: row.updatedAt.toISOString(),
+    canRetry: row.reservationStatus === "PENDING",
+    reservation: {
+      id: row.reservationId,
+      teacherName: row.payload.teacherName,
+      className: row.payload.className,
+      cartName: row.payload.cartName,
+      date: row.payload.date,
+      startTime: row.payload.startTime,
+      endTime: row.payload.endTime,
+      status: row.reservationStatus,
+    },
+  }));
+}
+
+export async function retryFailedNotification(container: AppContainer, id: string): Promise<void> {
+  const requeued = await requeueFailedNotification(container.db, id, container.clock.now());
+  if (!requeued) {
+    throw AppError.conflict(
+      "Este e-mail não pode ser reenviado: o pedido já foi decidido ou cancelado, ou o reenvio já foi feito.",
+      "NOTIFICATION_NOT_RETRYABLE",
+    );
+  }
+  scheduleNotificationDispatch(container);
 }

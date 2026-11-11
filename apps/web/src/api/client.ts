@@ -1,6 +1,5 @@
 import type { ApiErrorBody } from "@chromebook/shared";
 import { env } from "../lib/env";
-import { sessionSource } from "../auth/session-source";
 import { getAccessCode } from "../lib/access-code";
 
 export class ApiError extends Error {
@@ -34,7 +33,7 @@ function requiresAuth(path: string): boolean {
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const authenticated = requiresAuth(path);
-  const accessToken = authenticated ? await sessionSource.getAccessToken() : null;
+  const accessToken = authenticated ? await (await import("../auth/session-source")).sessionSource.getAccessToken() : null;
   const headers = new Headers(options.headers);
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   const accessCode = authenticated ? null : getAccessCode();

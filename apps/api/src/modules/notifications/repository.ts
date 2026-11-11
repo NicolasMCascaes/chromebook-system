@@ -1,6 +1,6 @@
-import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { DbExecutor } from "@/lib/db/client";
-import { notificationOutbox, type NotificationRow, type ReservationNotificationPayload } from "@/lib/db/schema";
+import { notificationOutbox, reservations, type NotificationRow, type ReservationNotificationPayload } from "@/lib/db/schema";
 
 export async function enqueueReservationNotification(
   db: DbExecutor,
@@ -53,4 +53,38 @@ export async function markNotificationFailed(
       nextAttemptAt: error.retryAt,
     })
     .where(eq(notificationOutbox.id, notification.id));
+}
+
+export async function listFailedNotifications(db: DbExecutor, options: { fromDate: string }) {
+  return db
+    .select({
+      id: notificationOutbox.id,
+      recipient: notificationOutbox.recipient,
+      attempts: notificationOutbox.attempts,
+      lastError: notificationOutbox.lastError,
+      updatedAt: notificationOutbox.updatedAt,
+      payload: notificationOutbox.payload,
+      reservationId: reservations.id,
+      reservationStatus: reservations.status,
+    })
+    .from(notificationOutbox)
+    .innerJoin(reservations, eq(reservations.id, notificationOutbox.reservationId))
+    .where(and(eq(notificationOutbox.status, "FAILED"), gte(reservations.reservationDate, options.fromDate)))
+    .orderBy(desc(notificationOutbox.updatedAt));
+}
+
+export async function requeueFailedNotification(db: DbExecutor, id: string, now: Date): Promise<boolean> {
+  const pendingReservations = db.select({ id: reservations.id }).from(reservations).where(eq(reservations.status, "PENDING"));
+  const rows = await db
+    .update(notificationOutbox)
+    .set({ status: "PENDING", attempts: 0, nextAttemptAt: now })
+    .where(
+      and(
+        eq(notificationOutbox.id, id),
+        eq(notificationOutbox.status, "FAILED"),
+        inArray(notificationOutbox.reservationId, pendingReservations),
+      ),
+    )
+    .returning({ id: notificationOutbox.id });
+  return rows.length > 0;
 }

@@ -13,6 +13,7 @@ import type {
   ChromebookInput,
   ChromebookStatus,
   ChromebookUpdate,
+  FailedNotificationDto,
   MeDto,
   ReservationDto,
   ReservationDecisionInput,
@@ -350,4 +351,22 @@ export function useFetchCartUpcomingReservations() {
       queryFn: () => apiFetch<AdminReservationDto[]>(`/api/admin/carts/${cartId}/upcoming-reservations`),
       staleTime: 0,
     });
+}
+
+const FAILED_NOTIFICATIONS_KEY = ["admin", "notifications", "failed"] as const;
+
+export function useFailedNotifications() {
+  return useQuery({
+    queryKey: FAILED_NOTIFICATIONS_KEY,
+    queryFn: () => apiFetch<FailedNotificationDto[]>("/api/admin/notifications/failed"),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useRetryNotification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<{ queued: boolean }>(`/api/admin/notifications/${id}/retry`, { method: "POST" }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: FAILED_NOTIFICATIONS_KEY }),
+  });
 }

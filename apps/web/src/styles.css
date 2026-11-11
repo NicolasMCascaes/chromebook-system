@@ -691,3 +691,126 @@ tbody tr:last-child td {
   font-size: 0.875rem;
   color: var(--color-muted);
 }
+
+.failed-notifications {
+  border-left: 4px solid var(--color-error-text);
+}
+
+.error-cell {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.print-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.print-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.print-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.print-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.print-header p {
+  margin: 4px 0 0;
+  font-size: 1.125rem;
+}
+
+.print-note {
+  margin: 0;
+  font-style: italic;
+}
+
+.print-cart h2 {
+  margin: 0 0 8px;
+  font-size: 1.125rem;
+}
+
+.print-cart table {
+  border: 1px solid var(--color-border);
+}
+
+.print-cart td,
+.print-cart th {
+  border: 1px solid var(--color-border);
+}
+
+.print-notes {
+  white-space: normal;
+  min-width: 160px;
+}
+
+.print-empty {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.print-check {
+  width: 1%;
+  text-align: center;
+}
+
+.print-box {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body,
+  .print-page {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .print-page {
+    max-width: none;
+    padding: 0;
+  }
+
+  .print-cart {
+    break-inside: avoid;
+  }
+
+  .print-cart table,
+  .print-cart td,
+  .print-cart th {
+    border-color: #555 !important;
+    color: #000 !important;
+  }
+
+  .print-empty,
+  .print-cart th {
+    color: #333 !important;
+  }
+
+  .swatch {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

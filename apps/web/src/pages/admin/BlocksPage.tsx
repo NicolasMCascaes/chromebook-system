@@ -12,6 +12,7 @@ import {
 } from "@chromebook/shared";
 import { useAdminBlocks, useAdminCarts, useDeleteBlock, usePreviewBlock, useSaveBlock } from "../../api/hooks";
 import { errorMessage } from "../../api/client";
+import { Modal } from "../../components/Modal";
 import { StatusMessage } from "../../components/StatusMessage";
 import { FieldError } from "../../components/FieldError";
 import { AffectedReservations } from "../../features/admin/AffectedReservations";
@@ -90,8 +91,7 @@ function BlockForm({
   }
 
   return (
-    <form className="card form" onSubmit={handleSubmit} noValidate>
-      <h2>{block ? "Editar bloqueio" : "Novo bloqueio ou feriado"}</h2>
+    <form className="form" onSubmit={handleSubmit} noValidate>
       <div className="form-grid">
         <label className="field">
           <span>Tipo</span>
@@ -235,17 +235,23 @@ export function BlocksPage() {
           <AffectedReservations reservations={result.affected} intro="No período bloqueado," />
         </>
       )}
-      {editing && carts.data && (
-        <BlockForm
-          key={editing === "new" ? "new" : editing.id}
-          block={editing === "new" ? undefined : editing}
-          carts={carts.data}
-          onDone={(outcome) => {
-            setEditing(null);
-            setResult(outcome);
-          }}
-        />
-      )}
+      <Modal
+        open={editing !== null}
+        title={editing === "new" ? "Novo bloqueio ou feriado" : "Editar bloqueio"}
+        onClose={() => setEditing(null)}
+      >
+        {editing && carts.data && (
+          <BlockForm
+            key={editing === "new" ? "new" : editing.id}
+            block={editing === "new" ? undefined : editing}
+            carts={carts.data}
+            onDone={(outcome) => {
+              setEditing(null);
+              setResult(outcome);
+            }}
+          />
+        )}
+      </Modal>
 
       {blocks.isPending && <StatusMessage kind="loading">Carregando bloqueios…</StatusMessage>}
       {blocks.isError && <StatusMessage kind="error">{errorMessage(blocks.error)}</StatusMessage>}

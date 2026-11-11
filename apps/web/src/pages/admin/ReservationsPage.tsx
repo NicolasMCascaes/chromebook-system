@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import {
   addDays,
   RESERVATION_STATUS_LABELS,
@@ -26,6 +27,7 @@ import { FieldError } from "../../components/FieldError";
 import { apiFieldErrors, zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
 import { formatDateShort, formatTimeRange, plural } from "../../lib/format";
 import { DecisionPanel } from "../../features/admin/DecisionPanel";
+import { FailedNotifications } from "../../features/admin/FailedNotifications";
 import { ReservationSummary } from "../../features/agenda/ReservationDialog";
 
 const DEFAULT_RANGE_DAYS = 30;
@@ -301,13 +303,19 @@ export function ReservationsPage() {
   return (
     <div className="stack">
       {feedback && <StatusMessage kind="success">{feedback}</StatusMessage>}
+      <FailedNotifications />
       <PendingRequests
         onDecide={(reservation) => {
           setFeedback("");
           setAction({ type: "decide", reservation });
         }}
       />
-      <h2>Todas as reservas</h2>
+      <div className="toolbar">
+        <h2>Todas as reservas</h2>
+        <Link to="/admin/impressao" target="_blank" rel="noopener" className="button secondary">
+          Imprimir agenda do dia
+        </Link>
+      </div>
       <form
         className="filters"
         onSubmit={(event) => {

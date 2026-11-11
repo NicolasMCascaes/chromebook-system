@@ -156,3 +156,22 @@ export interface SchoolSettingsMutationDto {
   settings: SchoolSettingsDto;
   affectedReservations: AdminReservationDto[];
 }
+
+export interface FailedNotificationDto {
+  id: string;
+  recipient: string;
+  attempts: number;
+  lastError: string | null;
+  failedAt: string;
+  canRetry: boolean;
+  reservation: {
+    id: string;
+    teacherName: string;
+    className: string;
+    cartName: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    status: ReservationStatus;
+  };
+}

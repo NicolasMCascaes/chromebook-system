@@ -3,11 +3,12 @@ import { USER_ROLE_LABELS, PASSWORD_MIN_LENGTH, userInputSchema, type UserDto } 
 import { useAdminUsers, useAuthorizeUser, useUpdateUser } from "../../api/hooks";
 import { errorMessage } from "../../api/client";
 import { useCurrentUser } from "../../auth/guards";
+import { Modal } from "../../components/Modal";
 import { StatusMessage } from "../../components/StatusMessage";
 import { FieldError } from "../../components/FieldError";
 import { apiFieldErrors, zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
 
-function AuthorizeUserForm({ onDone }: { onDone: (message: string) => void }) {
+function AuthorizeUserForm({ onDone, onCancel }: { onDone: (message: string) => void; onCancel: () => void }) {
   const [values, setValues] = useState({ email: "", name: "", password: "" });
   const [errors, setErrors] = useState<FieldErrors>({});
   const authorize = useAuthorizeUser();
@@ -30,8 +31,7 @@ function AuthorizeUserForm({ onDone }: { onDone: (message: string) => void }) {
   }
 
   return (
-    <form className="card form" onSubmit={handleSubmit} noValidate>
-      <h2>Autorizar acesso do TI</h2>
+    <form className="form" onSubmit={handleSubmit} noValidate>
       <p className="muted small-text">Professores não precisam de conta: eles reservam pelo link público da agenda.</p>
       <div className="form-grid">
         <label className="field">
@@ -66,6 +66,9 @@ function AuthorizeUserForm({ onDone }: { onDone: (message: string) => void }) {
       </div>
       {authorize.isError && <StatusMessage kind="error">{errorMessage(authorize.error)}</StatusMessage>}
       <div className="actions">
+        <button type="button" className="button secondary" onClick={onCancel}>
+          Cancelar
+        </button>
         <button type="submit" className="button primary" disabled={authorize.isPending}>
           {authorize.isPending ? "Autorizando…" : "Autorizar"}
         </button>
@@ -121,10 +124,34 @@ export function UsersPage() {
   const currentUser = useCurrentUser();
   const users = useAdminUsers();
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [authorizing, setAuthorizing] = useState(false);
 
   return (
     <div className="stack">
-      <AuthorizeUserForm onDone={(text) => setFeedback({ kind: "success", text })} />
+      <div className="toolbar">
+        <p className="muted small-text">Contas com acesso à área do TI.</p>
+        <button
+          type="button"
+          className="button primary"
+          onClick={() => {
+            setFeedback(null);
+            setAuthorizing(true);
+          }}
+        >
+          Autorizar acesso do TI
+        </button>
+      </div>
+      <Modal open={authorizing} title="Autorizar acesso do TI" onClose={() => setAuthorizing(false)}>
+        {authorizing && (
+          <AuthorizeUserForm
+            onCancel={() => setAuthorizing(false)}
+            onDone={(text) => {
+              setAuthorizing(false);
+              setFeedback({ kind: "success", text });
+            }}
+          />
+        )}
+      </Modal>
       {feedback && <StatusMessage kind={feedback.kind}>{feedback.text}</StatusMessage>}
 
       {users.isPending && <StatusMessage kind="loading">Carregando usuários…</StatusMessage>}
