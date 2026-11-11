@@ -20,21 +20,21 @@ Observação: as imagens de referência visual mencionadas não chegaram nesta c
 | Next.js | 16.4.x | apenas Route Handlers (API); `middleware` passou a se chamar `proxy` no 16 |
 | FullCalendar | 7.1.x (`@fullcalendar/react`, `daygrid`, `timegrid`, `list`, `interaction`) | v7 exige `temporal-polyfill` como peer |
 | TypeScript | 6.0.x | 7.0 (port nativo, jul/2026) adiado até confirmar compatibilidade com Next e typescript-eslint |
-| Drizzle ORM / drizzle-kit | 0.45.x / 0.31.x | não usar a linha 1.0 (ainda RC) |
+| Drizzle ORM | 0.45.x | não usar a linha 1.0 (ainda RC); migrations aplicadas pelo migrator do próprio `drizzle-orm` |
 | Driver PG | `postgres` (postgres.js) | confirmar compatibilidade da v4 com Drizzle 0.45; senão fixar 3.4.x |
 | `@supabase/supabase-js` | 2.x | frontend (auth) e backend (Admin API) |
 | `jose` | atual | validação do JWT via JWKS |
 | Zod | 4.x | validação compartilhada |
 | TanStack Query | 5.x | cache e invalidação da agenda |
-| React Router | atual estável | |
-| Vitest / Testcontainers | 5.x / `@testcontainers/postgresql` 12.x | Docker 29 disponível localmente |
+| React Router | 7.18.x | a v8 exige Node >= 22.22 (local: 22.20) |
+| Vitest | 5.x | integração contra PostgreSQL 17 instalado localmente (sem Docker) |
 | PostgreSQL | 17 (confirmar versão do projeto Supabase) | mesma imagem nos testes |
 
 ## Decisões principais
 
 1. **Monorepo com npm workspaces**: `apps/web` (Vite), `apps/api` (Next.js), `packages/shared` (schemas Zod, tipos e constantes de domínio). Justificativa: o mesmo schema valida o formulário e a API sem duplicação; o backend continua sendo a autoridade. Sem Turborepo/Nx.
 2. **Next.js só como API.** Funciona, mas é mais pesado que o necessário para uma API pura; mantido porque é requisito. Frontend e API ficam em projetos Vercel separados, por isso CORS explícito com lista de origens em `ALLOWED_ORIGINS`.
-3. **Persistência: Drizzle ORM + postgres.js + migrations SQL versionadas (drizzle-kit).**
+3. **Persistência: Drizzle ORM + postgres.js + migrations SQL versionadas, escritas à mão em `apps/api/drizzle/` e registradas em `meta/_journal.json`.** O `drizzle-kit` foi removido por não ser necessário (e trazia um alerta de segurança transitivo).
    - Mais próximo de "SQL explícito + Flyway" do que Prisma; aceita migrations customizadas para `btree_gist`, `EXCLUDE`, coluna gerada `tsrange` e `GRANT/REVOKE`, que Prisma não modela.
    - Transações explícitas (`db.transaction`) e captura de SQLSTATE (`23P01`, `23505`).
    - Conexão via Supavisor em modo transação (porta 6543) com `prepare: false`, adequado a serverless.
@@ -51,7 +51,7 @@ Observação: as imagens de referência visual mencionadas não chegaram nesta c
 8. **Tabelas fora da API pública do Supabase**: todas no schema `app` (não exposto ao PostgREST), com RLS habilitado e sem policies, e `REVOKE ALL ... FROM anon, authenticated`. Apenas o backend acessa, pela connection string.
 9. **E-mail (outbox transacional)**: a linha em `app.notification_outbox` é inserida na mesma transação da reserva. Depois do commit, `after()` do Next tenta o envio sem bloquear a resposta. Um endpoint interno protegido por `CRON_SECRET` reprocessa pendentes (`FOR UPDATE SKIP LOCKED`, `max_attempts` = 5, backoff, `last_error` sanitizado). A resposta ao professor é 201 independentemente do e-mail. Interface `EmailSender` com `ResendEmailSender` (HTTP simples, uma dependência), `ConsoleEmailSender` (dev) e `FakeEmailSender` (testes).
 10. **Bloqueios × reservas concorrentes**: a reserva verifica bloqueios dentro da própria transação. Ao criar um bloqueio, a API retorna as reservas afetadas para o admin decidir; nada é cancelado automaticamente. A janela de corrida entre as duas operações é aceitável porque o admin sempre vê a lista de afetadas após o commit.
-11. **CSS Modules + variáveis CSS** (nativo do Vite), sem Tailwind, para não adicionar dependência.
+11. **CSS com variáveis** (folha global na Etapa 2; CSS Modules quando os componentes da agenda crescerem), sem Tailwind, para não adicionar dependência.
 
 ## Modelo de dados (schema `app`)
 
@@ -95,7 +95,7 @@ Regras validadas em `reservations/service` (dentro da transação): dia útil, s
 ```
 chromebook_system/
   package.json            (workspaces)
-  .env.example  .gitignore  .nvmrc  README.md
+  .gitignore  .gitattributes  .nvmrc  README.md
   docs/PLANO.md
   packages/shared/src/    (schemas zod, enums, tipos de DTO)
   apps/api/
@@ -104,7 +104,7 @@ chromebook_system/
     src/modules/{users,carts,chromebooks,reservations,blocks,settings,notifications}/
     src/lib/{db,auth,http,time,email}/
     scripts/create-admin.ts
-    test/                 (integração com Testcontainers)
+    test/                 (integração com PostgreSQL local, banco chromebook_test)
   apps/web/
     src/pages/{AgendaPage,LoginPage,AuthCallback,admin/*}
     src/components/{calendar,reservation-form,ui}/
@@ -112,7 +112,7 @@ chromebook_system/
     src/lib/supabase.ts   (só URL e publishable/anon key)
 ```
 
-Variáveis em `.env.example`:
+Variáveis (exemplos em `apps/api/.env.example`, `apps/api/.env.test.example` e `apps/web/.env.example`):
 - API: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ALLOWED_ORIGINS`, `APP_PUBLIC_URL`, `EMAIL_PROVIDER`, `RESEND_API_KEY`, `EMAIL_FROM`, `CRON_SECRET`.
 - Web: `VITE_API_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
 
@@ -127,7 +127,7 @@ Variáveis em `.env.example`:
 - Estados: carregando, vazio, erro, confirmação.
 - A forma de passar o fuso ao FullCalendar 7 (timeZone nomeado via Temporal × strings "flutuantes") será verificada na documentação na Etapa 4.
 
-## Testes prioritários (Etapa 3 em diante, Vitest + Testcontainers `postgres:17`)
+## Testes prioritários (Vitest + PostgreSQL 17 local, sem Docker)
 
 Banco real com as mesmas migrations:
 - sobreposição no mesmo carrinho (409);

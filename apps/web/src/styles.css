@@ -1,0 +1,383 @@
+:root {
+  --color-bg: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-border: #dfe3e8;
+  --color-text: #1f2933;
+  --color-muted: #616e7c;
+  --color-primary: #1565c0;
+  --color-primary-hover: #0d47a1;
+  --color-success-bg: #e8f5e9;
+  --color-success-text: #1b5e20;
+  --color-error-bg: #fdecea;
+  --color-error-text: #b71c1c;
+  --color-info-bg: #e3f2fd;
+  --color-info-text: #0d47a1;
+  --color-warning-bg: #fff8e1;
+  --color-warning-text: #8d6e00;
+  --radius: 8px;
+  --space: 16px;
+  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+h2 {
+  font-size: 1.125rem;
+  margin: 0 0 12px;
+}
+
+a {
+  color: var(--color-primary);
+}
+
+.muted {
+  color: var(--color-muted);
+  margin: 0;
+}
+
+.full-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space);
+  padding: var(--space);
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 24px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+.brand {
+  font-weight: 600;
+}
+
+.app-nav,
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.app-nav a,
+.tabs a {
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  color: var(--color-muted);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.app-nav a.active,
+.tabs a.active {
+  background: var(--color-info-bg);
+  color: var(--color-primary);
+}
+
+.tabs {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 8px;
+}
+
+.user-box {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.page,
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+.page-header,
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space);
+  flex-wrap: wrap;
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.field.full {
+  grid-column: 1 / -1;
+}
+
+.field.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.field.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  align-self: end;
+  padding-bottom: 8px;
+}
+
+.field input:not([type="checkbox"]):not([type="color"]),
+.field select,
+td select {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.field input[type="color"] {
+  width: 64px;
+  height: 38px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.field-error {
+  color: var(--color-error-text);
+  font-weight: 400;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.button {
+  font: inherit;
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.button.primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.button.primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.button.secondary {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.button.link {
+  background: none;
+  color: var(--color-primary);
+  padding: 4px 8px;
+}
+
+.status {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
+}
+
+.status-loading,
+.status-empty {
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  color: var(--color-muted);
+}
+
+.status-error {
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
+}
+
+.status-success {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.status-info {
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+}
+
+.table-wrapper {
+  overflow-x: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+th {
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.row-inactive td {
+  color: var(--color-muted);
+}
+
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.badge-available {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.badge-maintenance {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.badge-inactive {
+  background: #eceff1;
+  color: var(--color-muted);
+}
+
+.cart-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.cart-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .app-header {
+    padding: 12px 16px;
+    gap: 12px;
+  }
+
+  .app-main {
+    padding: 16px;
+  }
+
+  .user-box {
+    margin-left: 0;
+  }
+}
