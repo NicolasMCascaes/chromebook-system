@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import {
   CHROMEBOOK_STATUS_LABELS,
   CHROMEBOOK_STATUSES,
@@ -178,12 +178,26 @@ function ChromebookForm({
   );
 }
 
+type SortDirection = "asc" | "desc";
+
+const assetTagCollator = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
+
+function sortByAssetTag(chromebooks: ChromebookDto[], direction: SortDirection): ChromebookDto[] {
+  const factor = direction === "asc" ? 1 : -1;
+  return [...chromebooks].sort((a, b) => factor * assetTagCollator.compare(a.assetTag, b.assetTag));
+}
+
 export function ChromebooksPage() {
   const [filters, setFilters] = useState<ChromebookFilters>({});
   const carts = useAdminCarts();
   const chromebooks = useAdminChromebooks(filters);
   const [editing, setEditing] = useState<ChromebookDto | "new" | null>(null);
   const [feedback, setFeedback] = useState("");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const sortedChromebooks = useMemo(
+    () => (chromebooks.data ? sortByAssetTag(chromebooks.data, sortDirection) : []),
+    [chromebooks.data, sortDirection],
+  );
 
   const hasCarts = (carts.data?.length ?? 0) > 0;
 
@@ -269,7 +283,16 @@ export function ChromebooksPage() {
           <table>
             <thead>
               <tr>
-                <th>Identificação</th>
+                <th aria-sort={sortDirection === "asc" ? "ascending" : "descending"}>
+                  <button
+                    type="button"
+                    className="sort-button"
+                    title={sortDirection === "asc" ? "Ordem crescente. Clique para decrescente." : "Ordem decrescente. Clique para crescente."}
+                    onClick={() => setSortDirection((current) => (current === "asc" ? "desc" : "asc"))}
+                  >
+                    Identificação <span aria-hidden="true">{sortDirection === "asc" ? "▲" : "▼"}</span>
+                  </button>
+                </th>
                 <th>Nome</th>
                 <th>Marca/modelo</th>
                 <th>Carrinho</th>
@@ -278,7 +301,7 @@ export function ChromebooksPage() {
               </tr>
             </thead>
             <tbody>
-              {chromebooks.data.map((chromebook) => (
+              {sortedChromebooks.map((chromebook) => (
                 <tr key={chromebook.id}>
                   <td>{chromebook.assetTag}</td>
                   <td>{chromebook.name}</td>
