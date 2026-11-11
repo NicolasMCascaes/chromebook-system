@@ -5,7 +5,8 @@ import type { AppContainer } from "@/lib/container";
 import type { AuthUser } from "@/lib/auth/authenticate";
 import { AppError } from "@/lib/http/errors";
 import { isPgError, isRetryableTransactionError, PG_EXCLUSION_VIOLATION } from "@/lib/db/errors";
-import { getSchoolHours } from "@/modules/settings/repository";
+import { getNotificationEmails, getSchoolHours } from "@/modules/settings/repository";
+import { enqueueReservationCreated } from "@/modules/notifications/repository";
 import { findBlockingEntry } from "@/modules/blocks/repository";
 import { findCartForReservation } from "@/modules/carts/repository";
 import {
@@ -106,7 +107,7 @@ export async function createReservation(
         );
       }
 
-      return insertReservationIfNew(tx, {
+      const insertedId = await insertReservationIfNew(tx, {
         cartId: input.cartId,
         userId: createdBy?.id ?? null,
         teacherName: input.teacherName,
@@ -119,6 +120,18 @@ export async function createReservation(
         requestHash: hash,
         cancelTokenHash: hashCancelToken(input.cancelToken),
       });
+      if (insertedId) {
+        await enqueueReservationCreated(tx, insertedId, await getNotificationEmails(tx), {
+          teacherName: input.teacherName,
+          className: input.className,
+          cartName: cart.name,
+          date: input.date,
+          startTime: input.startTime,
+          endTime: input.endTime,
+          notes: input.notes,
+        });
+      }
+      return insertedId;
     });
 
   let insertedId: string | undefined;

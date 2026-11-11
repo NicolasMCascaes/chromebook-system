@@ -1,7 +1,7 @@
 import { and, asc, eq, gte, isNull, lte, or, type SQL } from "drizzle-orm";
-import type { CalendarBlockDto } from "@chromebook/shared";
+import type { BlockDto, CalendarBlockDto } from "@chromebook/shared";
 import type { DbExecutor } from "@/lib/db/client";
-import { calendarBlocks, type CalendarBlockRow } from "@/lib/db/schema";
+import { calendarBlocks, carts, type CalendarBlockRow } from "@/lib/db/schema";
 
 function appliesToCart(cartId: string | undefined): SQL | undefined {
   if (!cartId) return undefined;
@@ -33,4 +33,57 @@ export function toCalendarBlockDto(row: CalendarBlockRow): CalendarBlockDto {
     reason: row.reason,
     cartId: row.cartId,
   };
+}
+
+export type BlockView = CalendarBlockRow & { cartName: string | null };
+
+function selectBlockViews(db: DbExecutor) {
+  return db
+    .select({
+      id: calendarBlocks.id,
+      kind: calendarBlocks.kind,
+      startDate: calendarBlocks.startDate,
+      endDate: calendarBlocks.endDate,
+      reason: calendarBlocks.reason,
+      cartId: calendarBlocks.cartId,
+      createdBy: calendarBlocks.createdBy,
+      createdAt: calendarBlocks.createdAt,
+      updatedAt: calendarBlocks.updatedAt,
+      cartName: carts.name,
+    })
+    .from(calendarBlocks)
+    .leftJoin(carts, eq(carts.id, calendarBlocks.cartId))
+    .$dynamic();
+}
+
+export async function listBlockViews(db: DbExecutor, range: { from: string; to: string }): Promise<BlockView[]> {
+  return selectBlockViews(db)
+    .where(and(lte(calendarBlocks.startDate, range.to), gte(calendarBlocks.endDate, range.from)))
+    .orderBy(asc(calendarBlocks.startDate), asc(calendarBlocks.createdAt));
+}
+
+export async function findBlockView(db: DbExecutor, id: string): Promise<BlockView | undefined> {
+  const [row] = await selectBlockViews(db).where(eq(calendarBlocks.id, id));
+  return row;
+}
+
+type BlockValues = Pick<typeof calendarBlocks.$inferInsert, "kind" | "startDate" | "endDate" | "reason" | "cartId">;
+
+export async function insertBlock(db: DbExecutor, values: BlockValues & { createdBy: string }): Promise<string> {
+  const [row] = await db.insert(calendarBlocks).values(values).returning({ id: calendarBlocks.id });
+  return row!.id;
+}
+
+export async function updateBlock(db: DbExecutor, id: string, values: BlockValues): Promise<boolean> {
+  const rows = await db.update(calendarBlocks).set(values).where(eq(calendarBlocks.id, id)).returning({ id: calendarBlocks.id });
+  return rows.length > 0;
+}
+
+export async function deleteBlock(db: DbExecutor, id: string): Promise<boolean> {
+  const rows = await db.delete(calendarBlocks).where(eq(calendarBlocks.id, id)).returning({ id: calendarBlocks.id });
+  return rows.length > 0;
+}
+
+export function toBlockDto(view: BlockView): BlockDto {
+  return { ...toCalendarBlockDto(view), cartName: view.cartName, createdAt: view.createdAt.toISOString() };
 }

@@ -1,6 +1,24 @@
 import { sql } from "drizzle-orm";
-import { boolean, date, integer, pgSchema, smallint, text, time, timestamp, uuid } from "drizzle-orm/pg-core";
-import type { CalendarBlockKind, ChromebookStatus, ReservationStatus, UserRole } from "@chromebook/shared";
+import { boolean, date, integer, jsonb, pgSchema, smallint, text, time, timestamp, uuid } from "drizzle-orm/pg-core";
+import type {
+  CalendarBlockKind,
+  ChromebookStatus,
+  NotificationStatus,
+  ReservationStatus,
+  UserRole,
+} from "@chromebook/shared";
+
+export type NotificationType = "RESERVATION_CREATED";
+
+export interface ReservationCreatedPayload {
+  teacherName: string;
+  className: string;
+  cartName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  notes: string | null;
+}
 
 export const app = pgSchema("app");
 
@@ -45,6 +63,7 @@ export const schoolSettings = app.table("school_settings", {
   openingTime: time("opening_time").notNull(),
   closingTime: time("closing_time").notNull(),
   slotMinutes: smallint("slot_minutes").notNull(),
+  notificationEmails: text("notification_emails").array().notNull().default(sql`'{}'`),
   ...timestamps,
 });
 
@@ -89,6 +108,23 @@ export const classPeriods = app.table("class_periods", {
   ...timestamps,
 });
 
+export const notificationOutbox = app.table("notification_outbox", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: text("type").$type<NotificationType>().notNull(),
+  reservationId: uuid("reservation_id")
+    .notNull()
+    .references(() => reservations.id, { onDelete: "restrict" }),
+  recipient: text("recipient").notNull(),
+  payload: jsonb("payload").$type<ReservationCreatedPayload>().notNull(),
+  status: text("status").$type<NotificationStatus>().notNull().default("PENDING"),
+  attempts: integer("attempts").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(5),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+  lastError: text("last_error"),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  ...timestamps,
+});
+
 export type UserRow = typeof users.$inferSelect;
 export type CartRow = typeof carts.$inferSelect;
 export type ChromebookRow = typeof chromebooks.$inferSelect;
@@ -96,3 +132,4 @@ export type SchoolSettingsRow = typeof schoolSettings.$inferSelect;
 export type CalendarBlockRow = typeof calendarBlocks.$inferSelect;
 export type ReservationRow = typeof reservations.$inferSelect;
 export type ClassPeriodRow = typeof classPeriods.$inferSelect;
+export type NotificationRow = typeof notificationOutbox.$inferSelect;

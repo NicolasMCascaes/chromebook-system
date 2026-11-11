@@ -532,3 +532,39 @@ tbody tr:last-child td {
 .small-text {
   font-size: 0.8125rem;
 }
+
+.button.link.danger-text {
+  color: var(--color-error-text);
+}
+
+.row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.row-actions .button + .button {
+  margin-left: 8px;
+}
+
+.year-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.period-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.period-row .field-error {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .period-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}

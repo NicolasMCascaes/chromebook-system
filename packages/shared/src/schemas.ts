@@ -1,5 +1,15 @@
 import { z } from "zod";
-import { CHROMEBOOK_STATUSES, MAX_CALENDAR_RANGE_DAYS, USER_ROLES } from "./enums";
+import {
+  CALENDAR_BLOCK_KINDS,
+  CHROMEBOOK_STATUSES,
+  MAX_ADMIN_RANGE_DAYS,
+  MAX_CALENDAR_RANGE_DAYS,
+  MAX_CLASS_PERIODS,
+  MAX_NOTIFICATION_EMAILS,
+  RESERVATION_STATUSES,
+  SLOT_MINUTES_OPTIONS,
+  USER_ROLES,
+} from "./enums";
 import { daysBetween, isValidIsoDate, TIME_PATTERN, timeToMinutes } from "./time";
 
 const requiredText = (label: string, max: number) =>
@@ -83,12 +93,14 @@ export const chromebookFilterSchema = z.object({
 
 const userRole = z.enum(USER_ROLES, { error: "Perfil inválido." });
 
+const emailAddress = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.email("E-mail inválido.").max(254, "E-mail muito longo."));
+
 export const userInputSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .pipe(z.email("E-mail inválido.").max(254, "E-mail muito longo.")),
+  email: emailAddress,
   name: requiredText("Nome", 100),
   role: userRole.default("PROFESSOR"),
 });
@@ -156,3 +168,126 @@ export const availabilityQuerySchema = z.object({
   date: isoDate,
   cartId: z.uuid("Carrinho inválido.").optional(),
 });
+
+export const adminReservationQuerySchema = z
+  .object({
+    from: isoDate,
+    to: isoDate,
+    cartId: z.uuid("Carrinho inválido.").optional(),
+    status: z.enum(RESERVATION_STATUSES, { error: "Situação inválida." }).optional(),
+    search: z.string().trim().max(100, "Busca muito longa.").optional(),
+  })
+  .refine((value) => daysBetween(value.from, value.to) >= 0, {
+    message: "A data final deve ser igual ou posterior à inicial.",
+    path: ["to"],
+  })
+  .refine((value) => daysBetween(value.from, value.to) <= MAX_ADMIN_RANGE_DAYS, {
+    message: `O período consultado deve ter no máximo ${MAX_ADMIN_RANGE_DAYS} dias.`,
+    path: ["to"],
+  });
+
+export const reservationUpdateSchema = z
+  .object({
+    teacherName: requiredText("Nome do professor", 100).optional(),
+    className: requiredText("Turma", 60).optional(),
+    cartId: z.uuid("Selecione um carrinho.").optional(),
+    date: isoDate.optional(),
+    startTime: clockTime("Horário de início").optional(),
+    endTime: clockTime("Horário de término").optional(),
+    notes: optionalText("Observação", 500).optional(),
+  })
+  .refine(atLeastOneField, NO_FIELDS_MESSAGE);
+export type ReservationUpdate = z.input<typeof reservationUpdateSchema>;
+
+export const blockInputSchema = z
+  .object({
+    kind: z.enum(CALENDAR_BLOCK_KINDS, { error: "Tipo inválido." }),
+    startDate: isoDate,
+    endDate: isoDate,
+    reason: requiredText("Motivo", 200),
+    cartId: z.uuid("Carrinho inválido.").nullable().optional().default(null),
+  })
+  .refine((value) => daysBetween(value.startDate, value.endDate) >= 0, {
+    message: "A data final deve ser igual ou posterior à inicial.",
+    path: ["endDate"],
+  })
+  .refine((value) => daysBetween(value.startDate, value.endDate) <= MAX_ADMIN_RANGE_DAYS, {
+    message: `O período deve ter no máximo ${MAX_ADMIN_RANGE_DAYS} dias.`,
+    path: ["endDate"],
+  })
+  .refine((value) => value.kind === "BLOCK" || value.cartId === null, {
+    message: "Feriados e recessos valem para todos os carrinhos.",
+    path: ["cartId"],
+  });
+export type BlockInput = z.input<typeof blockInputSchema>;
+
+export const blockQuerySchema = z.object({
+  year: z.coerce.number({ error: "Ano inválido." }).int("Ano inválido.").min(2000, "Ano inválido.").max(2100, "Ano inválido."),
+});
+
+const classPeriodInputSchema = z
+  .object({
+    name: requiredText("Nome da aula", 40),
+    startTime: clockTime("Início da aula"),
+    endTime: clockTime("Término da aula"),
+  })
+  .refine((value) => timeToMinutes(value.endTime) > timeToMinutes(value.startTime), {
+    message: "O término da aula deve ser posterior ao início.",
+    path: ["endTime"],
+  });
+
+export const schoolSettingsInputSchema = z
+  .object({
+    openingTime: clockTime("Abertura"),
+    closingTime: clockTime("Encerramento"),
+    slotMinutes: z
+      .number({ error: "Intervalo inválido." })
+      .refine((value) => (SLOT_MINUTES_OPTIONS as readonly number[]).includes(value), "Intervalo inválido."),
+    notificationEmails: z
+      .array(emailAddress)
+      .max(MAX_NOTIFICATION_EMAILS, `Informe no máximo ${MAX_NOTIFICATION_EMAILS} e-mails.`)
+      .refine((emails) => new Set(emails).size === emails.length, "Há e-mails repetidos."),
+    periods: z.array(classPeriodInputSchema).max(MAX_CLASS_PERIODS, `Cadastre no máximo ${MAX_CLASS_PERIODS} aulas.`),
+  })
+  .superRefine((value, context) => {
+    const opening = timeToMinutes(value.openingTime);
+    const closing = timeToMinutes(value.closingTime);
+    if (closing <= opening) {
+      context.addIssue({ code: "custom", message: "O encerramento deve ser posterior à abertura.", path: ["closingTime"] });
+      return;
+    }
+    if (opening % value.slotMinutes !== 0 || closing % value.slotMinutes !== 0) {
+      context.addIssue({
+        code: "custom",
+        message: `Abertura e encerramento devem ser múltiplos de ${value.slotMinutes} minutos.`,
+        path: ["slotMinutes"],
+      });
+    }
+    const sorted = value.periods
+      .map((period, index) => ({ ...period, index, start: timeToMinutes(period.startTime), end: timeToMinutes(period.endTime) }))
+      .sort((a, b) => a.start - b.start);
+    sorted.forEach((period, position) => {
+      if (period.start < opening || period.end > closing) {
+        context.addIssue({
+          code: "custom",
+          message: `${period.name} está fora do horário de funcionamento.`,
+          path: ["periods", period.index, "startTime"],
+        });
+      } else if (period.start % value.slotMinutes !== 0 || period.end % value.slotMinutes !== 0) {
+        context.addIssue({
+          code: "custom",
+          message: `Os horários de ${period.name} devem ser múltiplos de ${value.slotMinutes} minutos.`,
+          path: ["periods", period.index, "startTime"],
+        });
+      }
+      const previous = sorted[position - 1];
+      if (previous && period.start < previous.end) {
+        context.addIssue({
+          code: "custom",
+          message: `${period.name} se sobrepõe a ${previous.name}.`,
+          path: ["periods", period.index, "startTime"],
+        });
+      }
+    });
+  });
+export type SchoolSettingsInput = z.input<typeof schoolSettingsInputSchema>;

@@ -24,3 +24,30 @@ export async function listClassPeriods(db: DbExecutor): Promise<ClassPeriodDto[]
     endTime: normalizeTime(row.endTime),
   }));
 }
+
+export async function getNotificationEmails(db: DbExecutor): Promise<string[]> {
+  const [row] = await db
+    .select({ notificationEmails: schoolSettings.notificationEmails })
+    .from(schoolSettings)
+    .where(eq(schoolSettings.id, 1));
+  return row?.notificationEmails ?? [];
+}
+
+export async function lockSchoolSettings(db: DbExecutor): Promise<void> {
+  await db.select({ id: schoolSettings.id }).from(schoolSettings).where(eq(schoolSettings.id, 1)).for("update");
+}
+
+export async function updateSchoolSettings(
+  db: DbExecutor,
+  values: { openingTime: string; closingTime: string; slotMinutes: number; notificationEmails: string[] },
+): Promise<void> {
+  await db.update(schoolSettings).set(values).where(eq(schoolSettings.id, 1));
+}
+
+export async function replaceClassPeriods(
+  db: DbExecutor,
+  periods: { name: string; startTime: string; endTime: string }[],
+): Promise<void> {
+  await db.delete(classPeriods);
+  if (periods.length > 0) await db.insert(classPeriods).values(periods);
+}

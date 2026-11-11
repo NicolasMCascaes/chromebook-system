@@ -33,6 +33,19 @@ Copie os exemplos e preencha. Os arquivos `.env` e `.env.*` não são versionado
 
 `SUPABASE_SERVICE_ROLE_KEY` e as URLs do banco existem somente na API. O frontend recebe apenas a URL do Supabase e a chave pública (anon/publishable).
 
+## E-mail de novas reservas
+
+Cada reserva confirmada gera um e-mail para os endereços cadastrados em **Coordenação → Configurações**. A mensagem é gravada na tabela `notification_outbox` na mesma transação da reserva e enviada logo após a resposta; se o envio falhar, a reserva continua confirmada e o e-mail é reenviado com espera crescente (até 5 tentativas).
+
+| Variável | Uso |
+|---|---|
+| `EMAIL_PROVIDER` | `console` (padrão, apenas registra no log) ou `resend` |
+| `RESEND_API_KEY`, `EMAIL_FROM` | obrigatórias quando `EMAIL_PROVIDER=resend` |
+| `APP_PUBLIC_URL` | link da agenda incluído no e-mail (opcional) |
+| `CRON_SECRET` | protege `/api/internal/notifications/dispatch`, que reprocessa pendentes |
+
+`apps/api/vercel.json` agenda o reprocessamento uma vez por dia, o limite do plano Hobby. A Vercel envia `Authorization: Bearer <CRON_SECRET>` automaticamente. Em outro agendador, chame o endpoint com o mesmo cabeçalho.
+
 ## Banco de dados
 
 ```bash

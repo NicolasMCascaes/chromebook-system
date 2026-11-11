@@ -6,6 +6,7 @@ import { AppError } from "@/lib/http/errors";
 import { json, readJson } from "@/lib/http/responses";
 import { route } from "@/lib/http/route";
 import { createReservation } from "@/modules/reservations/service";
+import { scheduleNotificationDispatch } from "@/modules/notifications/service";
 
 export const dynamic = "force-dynamic";
 
@@ -25,5 +26,6 @@ export const POST = route(async (request) => {
   const idempotencyKey = readIdempotencyKey(request);
   const input = await readJson(request, reservationInputSchema);
   const { reservation, replayed } = await createReservation(container, admin, input, idempotencyKey);
+  if (!replayed) scheduleNotificationDispatch(container);
   return json(reservation, replayed ? 200 : 201);
 });

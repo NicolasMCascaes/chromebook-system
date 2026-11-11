@@ -8,8 +8,10 @@ import { setContainer, type AppContainer } from "@/lib/container";
 import { JwtTokenVerifier, SUPABASE_AUDIENCE } from "@/lib/auth/token-verifier";
 import type { AuthAdminGateway } from "@/lib/auth/auth-admin";
 import type { Clock } from "@/lib/clock";
+import type { EmailMessage, EmailSender } from "@/lib/email/sender";
 
 export const TEST_ISSUER = "http://supabase.test/auth/v1";
+export const TEST_CRON_SECRET = "test-cron-secret-0123456789abcdefghij";
 
 export class FakeAuthAdminGateway implements AuthAdminGateway {
   readonly idsByEmail = new Map<string, string>();
@@ -20,6 +22,21 @@ export class FakeAuthAdminGateway implements AuthAdminGateway {
     const id = randomUUID();
     this.idsByEmail.set(email, id);
     return id;
+  }
+}
+
+export class FakeEmailSender implements EmailSender {
+  readonly sent: EmailMessage[] = [];
+  failure: Error | null = null;
+
+  async send(message: EmailMessage): Promise<void> {
+    if (this.failure) throw this.failure;
+    this.sent.push(message);
+  }
+
+  clear(): void {
+    this.sent.length = 0;
+    this.failure = null;
   }
 }
 
@@ -50,12 +67,23 @@ export async function createTestContext() {
   const { publicKey, privateKey } = await generateKeyPair("ES256");
   const authAdmin = new FakeAuthAdminGateway();
   const clock = new FixedClock();
+  const emailSender = new FakeEmailSender();
+  const backgroundTasks: (() => Promise<void>)[] = [];
   const container: AppContainer = {
     db,
     tokenVerifier: new JwtTokenVerifier(publicKey, TEST_ISSUER),
     authAdmin,
     clock,
+    emailSender,
+    runAfterResponse: (task) => backgroundTasks.push(task),
+    cronSecret: TEST_CRON_SECRET,
+    appPublicUrl: "http://escola.test",
   };
+
+  async function runBackgroundTasks(): Promise<void> {
+    const tasks = backgroundTasks.splice(0);
+    for (const task of tasks) await task();
+  }
   setContainer(container);
 
   async function token(userId: string, options: TokenOptions = {}): Promise<string> {
@@ -86,10 +114,19 @@ export async function createTestContext() {
 
   async function reset(): Promise<void> {
     await client.unsafe(`
-      truncate app.reservations, app.calendar_blocks, app.chromebooks, app.carts, app.users cascade;
-      update app.school_settings set opening_time = '07:00', closing_time = '18:00', slot_minutes = 5;
+      truncate app.notification_outbox, app.reservations, app.calendar_blocks, app.chromebooks, app.carts, app.users cascade;
+      update app.school_settings set opening_time = '07:00', closing_time = '18:00', slot_minutes = 5, notification_emails = '{}';
+      delete from app.class_periods;
+      insert into app.class_periods (name, start_time, end_time) values
+        ('1ª aula', '07:20', '08:10'),
+        ('2ª aula', '08:10', '09:00'),
+        ('3ª aula', '09:00', '09:50'),
+        ('4ª aula', '10:10', '11:00'),
+        ('5ª aula', '11:00', '11:50');
     `);
     authAdmin.idsByEmail.clear();
+    emailSender.clear();
+    backgroundTasks.length = 0;
     clock.set(DEFAULT_TEST_NOW);
   }
 
@@ -98,7 +135,7 @@ export async function createTestContext() {
     await client.end();
   }
 
-  return { db, client, container, authAdmin, clock, token, createUser, reset, close };
+  return { db, client, container, authAdmin, clock, emailSender, runBackgroundTasks, token, createUser, reset, close };
 }
 
 export type TestContext = Awaited<ReturnType<typeof createTestContext>>;

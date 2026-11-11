@@ -1,4 +1,4 @@
-import { normalizeTime, type ReservationDto, type SchoolNow } from "@chromebook/shared";
+import { normalizeTime, type AdminReservationDto, type ReservationDto, type SchoolNow } from "@chromebook/shared";
 import type { ReservationView } from "./repository";
 import { startsInFuture } from "./rules";
 
@@ -25,5 +25,14 @@ export function toReservationDto(view: ReservationView, audience: ReservationAud
     notes: audience === "public" ? null : view.notes,
     canCancel: canCancelReservation(view, audience, now),
     createdAt: view.createdAt.toISOString(),
+  };
+}
+
+export function toAdminReservationDto(view: ReservationView, now: SchoolNow): AdminReservationDto {
+  return {
+    ...toReservationDto(view, "admin", now),
+    cancelReason: view.cancelReason,
+    cancelledAt: view.cancelledAt?.toISOString() ?? null,
+    updatedAt: view.updatedAt.toISOString(),
   };
 }

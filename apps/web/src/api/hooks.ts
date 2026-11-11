@@ -1,6 +1,10 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  AdminReservationDto,
   AvailabilityDto,
+  BlockDto,
+  BlockInput,
+  BlockMutationDto,
   CalendarDto,
   CartDto,
   CartInput,
@@ -12,6 +16,11 @@ import type {
   MeDto,
   ReservationDto,
   ReservationInput,
+  ReservationStatus,
+  ReservationUpdate,
+  SchoolSettingsDto,
+  SchoolSettingsInput,
+  SchoolSettingsMutationDto,
   UserDto,
   UserInput,
   UserUpdate,
@@ -26,7 +35,18 @@ export const queryKeys = {
   adminCarts: ["admin", "carts"] as const,
   adminChromebooks: (filters: ChromebookFilters) => ["admin", "chromebooks", filters] as const,
   adminUsers: ["admin", "users"] as const,
+  adminReservations: (filters: AdminReservationFilters) => ["admin", "reservations", filters] as const,
+  adminBlocks: (year: number) => ["admin", "blocks", year] as const,
+  adminSettings: ["admin", "settings"] as const,
 };
+
+export interface AdminReservationFilters {
+  from: string;
+  to: string;
+  cartId?: string;
+  status?: ReservationStatus;
+  search?: string;
+}
 
 export interface DateRange {
   from: string;
@@ -172,5 +192,103 @@ export function useUpdateUser() {
     mutationFn: ({ id, input }: { id: string; input: UserUpdate }) =>
       apiFetch<UserDto>(`/api/admin/users/${id}`, { method: "PATCH", body: input }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers }),
+  });
+}
+
+function useInvalidateReservations() {
+  const queryClient = useQueryClient();
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["admin", "reservations"] }),
+      queryClient.invalidateQueries({ queryKey: ["schedule"] }),
+    ]);
+}
+
+export function useAdminReservations(filters: AdminReservationFilters) {
+  const params = new URLSearchParams({ from: filters.from, to: filters.to });
+  if (filters.cartId) params.set("cartId", filters.cartId);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.search) params.set("search", filters.search);
+  return useQuery({
+    queryKey: queryKeys.adminReservations(filters),
+    queryFn: () => apiFetch<AdminReservationDto[]>(`/api/admin/reservations?${params.toString()}`),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useEditReservation() {
+  const invalidate = useInvalidateReservations();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: ReservationUpdate }) =>
+      apiFetch<AdminReservationDto>(`/api/admin/reservations/${id}`, { method: "PATCH", body: input }),
+    onSettled: invalidate,
+  });
+}
+
+export function useAdminCancelReservation() {
+  const invalidate = useInvalidateReservations();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string | null }) =>
+      apiFetch<ReservationDto>(`/api/admin/reservations/${id}/cancel`, { method: "POST", body: { reason } }),
+    onSettled: invalidate,
+  });
+}
+
+function useInvalidateBlocks() {
+  const queryClient = useQueryClient();
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["admin", "blocks"] }),
+      queryClient.invalidateQueries({ queryKey: ["schedule"] }),
+    ]);
+}
+
+export function useAdminBlocks(year: number) {
+  return useQuery({
+    queryKey: queryKeys.adminBlocks(year),
+    queryFn: () => apiFetch<BlockDto[]>(`/api/admin/blocks?year=${year}`),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function usePreviewBlock() {
+  return useMutation({
+    mutationFn: (input: BlockInput) =>
+      apiFetch<BlockMutationDto>("/api/admin/blocks?preview=true", { method: "POST", body: input }),
+  });
+}
+
+export function useSaveBlock() {
+  const invalidate = useInvalidateBlocks();
+  return useMutation({
+    mutationFn: ({ id, input }: { id?: string; input: BlockInput }) =>
+      id
+        ? apiFetch<BlockMutationDto>(`/api/admin/blocks/${id}`, { method: "PUT", body: input })
+        : apiFetch<BlockMutationDto>("/api/admin/blocks", { method: "POST", body: input }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteBlock() {
+  const invalidate = useInvalidateBlocks();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`/api/admin/blocks/${id}`, { method: "DELETE" }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useAdminSettings() {
+  return useQuery({ queryKey: queryKeys.adminSettings, queryFn: () => apiFetch<SchoolSettingsDto>("/api/admin/settings") });
+}
+
+export function useSaveSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SchoolSettingsInput) =>
+      apiFetch<SchoolSettingsMutationDto>("/api/admin/settings", { method: "PUT", body: input }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(queryKeys.adminSettings, result.settings);
+      return queryClient.invalidateQueries({ queryKey: ["schedule"] });
+    },
   });
 }

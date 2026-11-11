@@ -120,3 +120,29 @@ export interface AvailabilityDto {
   hours: SchoolHoursDto;
   carts: CartAvailabilityDto[];
 }
+
+export interface AdminReservationDto extends ReservationDto {
+  cancelReason: string | null;
+  cancelledAt: string | null;
+  updatedAt: string;
+}
+
+export interface BlockDto extends CalendarBlockDto {
+  cartName: string | null;
+  createdAt: string;
+}
+
+export interface BlockMutationDto {
+  block: BlockDto | null;
+  affectedReservations: AdminReservationDto[];
+}
+
+export interface SchoolSettingsDto extends SchoolHoursDto {
+  notificationEmails: string[];
+  periods: ClassPeriodDto[];
+}
+
+export interface SchoolSettingsMutationDto {
+  settings: SchoolSettingsDto;
+  affectedReservations: AdminReservationDto[];
+}

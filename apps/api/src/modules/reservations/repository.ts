@@ -1,4 +1,5 @@
-import { and, asc, eq, gte, lte, type SQL } from "drizzle-orm";
+import { and, asc, eq, gte, ilike, lte, or, type SQL } from "drizzle-orm";
+import type { ReservationStatus } from "@chromebook/shared";
 import type { DbExecutor } from "@/lib/db/client";
 import { carts, reservations, type ReservationRow } from "@/lib/db/schema";
 
@@ -81,6 +82,54 @@ export async function markReservationCancelled(
   const rows = await db
     .update(reservations)
     .set({ status: "CANCELLED", ...cancellation })
+    .where(and(eq(reservations.id, id), eq(reservations.status, "CONFIRMED")))
+    .returning({ id: reservations.id });
+  return rows.length > 0;
+}
+
+const ADMIN_LIST_LIMIT = 500;
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
+export async function listReservationsForAdmin(
+  db: DbExecutor,
+  filter: { from: string; to: string; cartId?: string; status?: ReservationStatus; search?: string },
+): Promise<ReservationView[]> {
+  const conditions: SQL[] = [gte(reservations.reservationDate, filter.from), lte(reservations.reservationDate, filter.to)];
+  if (filter.cartId) conditions.push(eq(reservations.cartId, filter.cartId));
+  if (filter.status) conditions.push(eq(reservations.status, filter.status));
+  if (filter.search) {
+    const pattern = `%${escapeLike(filter.search)}%`;
+    conditions.push(or(ilike(reservations.teacherName, pattern), ilike(reservations.className, pattern))!);
+  }
+  return selectReservationViews(db)
+    .where(and(...conditions))
+    .orderBy(asc(reservations.reservationDate), asc(reservations.startTime), asc(carts.displayOrder))
+    .limit(ADMIN_LIST_LIMIT);
+}
+
+export async function listUpcomingConfirmedReservations(
+  db: DbExecutor,
+  filter: { from: string; to?: string; cartId?: string | null },
+): Promise<ReservationView[]> {
+  const conditions: SQL[] = [eq(reservations.status, "CONFIRMED"), gte(reservations.reservationDate, filter.from)];
+  if (filter.to) conditions.push(lte(reservations.reservationDate, filter.to));
+  if (filter.cartId) conditions.push(eq(reservations.cartId, filter.cartId));
+  return selectReservationViews(db)
+    .where(and(...conditions))
+    .orderBy(asc(reservations.reservationDate), asc(reservations.startTime), asc(carts.displayOrder));
+}
+
+export async function updateReservationFields(
+  db: DbExecutor,
+  id: string,
+  values: Partial<Pick<typeof reservations.$inferInsert, "cartId" | "teacherName" | "className" | "reservationDate" | "startTime" | "endTime" | "notes">>,
+): Promise<boolean> {
+  const rows = await db
+    .update(reservations)
+    .set(values)
     .where(and(eq(reservations.id, id), eq(reservations.status, "CONFIRMED")))
     .returning({ id: reservations.id });
   return rows.length > 0;
