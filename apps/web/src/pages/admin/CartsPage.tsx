@@ -3,6 +3,7 @@ import { cartInputSchema, type AdminReservationDto, type CartDto } from "@chrome
 import { useAdminCarts, useFetchCartUpcomingReservations, useSaveCart } from "../../api/hooks";
 import { ImpactConfirmation } from "../../features/admin/AffectedReservations";
 import { errorMessage } from "../../api/client";
+import { Modal } from "../../components/Modal";
 import { StatusMessage } from "../../components/StatusMessage";
 import { FieldError } from "../../components/FieldError";
 import { apiFieldErrors, zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
@@ -74,8 +75,7 @@ function CartForm({ cart, onDone }: { cart?: CartDto; onDone: (message: string) 
   }
 
   return (
-    <form className="card form" onSubmit={handleSubmit} noValidate>
-      <h2>{cart ? `Editar ${cart.name}` : "Novo carrinho"}</h2>
+    <form className="form" onSubmit={handleSubmit} noValidate>
       <div className="form-grid">
         <label className="field">
           <span>Nome</span>
@@ -164,9 +164,15 @@ export function CartsPage() {
       </div>
 
       {feedback && <StatusMessage kind="success">{feedback}</StatusMessage>}
-      {editing && (
-        <CartForm key={editing === "new" ? "new" : editing.id} cart={editing === "new" ? undefined : editing} onDone={finish} />
-      )}
+      <Modal
+        open={editing !== null}
+        title={editing === "new" ? "Novo carrinho" : editing ? `Editar ${editing.name}` : ""}
+        onClose={() => setEditing(null)}
+      >
+        {editing && (
+          <CartForm key={editing === "new" ? "new" : editing.id} cart={editing === "new" ? undefined : editing} onDone={finish} />
+        )}
+      </Modal>
 
       {carts.isPending && <StatusMessage kind="loading">Carregando carrinhos…</StatusMessage>}
       {carts.isError && <StatusMessage kind="error">{errorMessage(carts.error)}</StatusMessage>}
