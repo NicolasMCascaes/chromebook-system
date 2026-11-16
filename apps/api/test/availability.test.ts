@@ -5,7 +5,7 @@ import * as calendarRoute from "@/app/api/calendar/route";
 import { calendarBlocks, chromebooks } from "@/lib/db/schema";
 import { createTestContext, type TestContext } from "./helpers/context";
 import { apiRequest, params } from "./helpers/http";
-import { cancelReservationRequest, createTeacher, NEXT_TUESDAY, postReservation, SATURDAY, seedCarts, TODAY, type Teacher } from "./helpers/reservations";
+import { useFiveMinutePeriods, cancelReservationRequest, createTeacher, NEXT_TUESDAY, postReservation, SATURDAY, seedCarts, TODAY, type Teacher } from "./helpers/reservations";
 
 describe("disponibilidade e agenda", () => {
   let ctx: TestContext;
@@ -19,6 +19,7 @@ describe("disponibilidade e agenda", () => {
 
   beforeEach(async () => {
     await ctx.reset();
+    await useFiveMinutePeriods(ctx);
     professor = createTeacher("Ana Souza");
     ({ cart1, cart2 } = await seedCarts(ctx));
   });

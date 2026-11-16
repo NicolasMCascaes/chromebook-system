@@ -1,4 +1,4 @@
-import type { SchoolHoursDto } from "./dto";
+import type { ClassScheduleDto, SchoolHoursDto } from "./dto";
 import { isWeekend, timeToMinutes, type SchoolNow } from "./time";
 
 export interface ReservationSlot {
@@ -53,6 +53,28 @@ export function checkSchoolHours(slot: Omit<ReservationSlot, "date">, hours: Sch
       message: `Os horários devem ser múltiplos de ${hours.slotMinutes} minutos (ex.: 07:00, 07:${String(hours.slotMinutes).padStart(2, "0")}).`,
       field: start % hours.slotMinutes !== 0 ? "startTime" : "endTime",
     };
+  }
+  return null;
+}
+
+export const NO_CLASS_PERIODS_MESSAGE = "As aulas ainda não foram cadastradas. Fale com o TI para reservar.";
+export const OUTSIDE_CLASS_PERIODS_MESSAGE = "Escolha o horário pelas aulas da turma.";
+
+export function scheduleForClass(schedules: ClassScheduleDto[], className: string): ClassScheduleDto | undefined {
+  const withPeriods = schedules.filter((schedule) => schedule.periods.length > 0);
+  return withPeriods.find((schedule) => schedule.classNames.includes(className)) ?? withPeriods[0];
+}
+
+export function checkClassPeriods(
+  slot: { className: string; startTime: string; endTime: string },
+  schedules: ClassScheduleDto[],
+): ReservationRuleViolation | null {
+  const schedule = scheduleForClass(schedules, slot.className);
+  if (!schedule) return { code: "NO_CLASS_PERIODS", message: NO_CLASS_PERIODS_MESSAGE, field: "startTime" };
+  const startsWithPeriod = schedule.periods.some((period) => period.startTime === slot.startTime);
+  const endsWithPeriod = schedule.periods.some((period) => period.endTime === slot.endTime);
+  if (!startsWithPeriod || !endsWithPeriod || slot.endTime <= slot.startTime) {
+    return { code: "OUTSIDE_CLASS_PERIODS", message: OUTSIDE_CLASS_PERIODS_MESSAGE, field: "startTime" };
   }
   return null;
 }

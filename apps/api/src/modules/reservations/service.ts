@@ -5,7 +5,7 @@ import type { AppContainer } from "@/lib/container";
 import type { AuthUser } from "@/lib/auth/authenticate";
 import { AppError } from "@/lib/http/errors";
 import { isPgError, isRetryableTransactionError, PG_EXCLUSION_VIOLATION } from "@/lib/db/errors";
-import { getNotificationEmails, getSchoolHours } from "@/modules/settings/repository";
+import { getNotificationEmails, getSchoolHours, listClassSchedules } from "@/modules/settings/repository";
 import { enqueueReservationNotification } from "@/modules/notifications/repository";
 import { findBlockingEntry } from "@/modules/blocks/repository";
 import { findCartForReservation } from "@/modules/carts/repository";
@@ -16,7 +16,7 @@ import {
   markReservationCancelled,
   type ReservationView,
 } from "./repository";
-import { assertDateAndTimeRules, assertWithinSchoolHours, ruleViolation, startsInFuture } from "./rules";
+import { assertDateAndTimeRules, assertMatchesClassPeriods, assertWithinSchoolHours, ruleViolation, startsInFuture } from "./rules";
 import { toReservationDto, type ReservationAudience } from "./mapper";
 
 export type ReservationInput = z.output<typeof reservationInputSchema>;
@@ -107,6 +107,7 @@ export async function createReservation(
     db.transaction(async (tx) => {
       const hours = await getSchoolHours(tx, { lockForShare: true });
       assertWithinSchoolHours(input, hours);
+      if (!approvedByCreator) assertMatchesClassPeriods(input, await listClassSchedules(tx));
 
       const cart = await findCartForReservation(tx, input.cartId);
       if (!cart || !cart.active) {

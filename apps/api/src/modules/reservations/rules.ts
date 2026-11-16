@@ -1,7 +1,9 @@
 import {
+  checkClassPeriods,
   checkReservationSlot,
   checkSchoolHours,
   timeToMinutes,
+  type ClassScheduleDto,
   type ReservationRuleViolation,
   type SchoolHoursDto,
   type SchoolNow,
@@ -32,4 +34,11 @@ export function assertDateAndTimeRules(slot: RequestedSlot, now: SchoolNow): voi
 
 export function assertWithinSchoolHours(slot: RequestedSlot, hours: SchoolHoursDto): void {
   throwIfViolated(checkSchoolHours(slot, hours));
+}
+
+export function assertMatchesClassPeriods(
+  slot: { className: string; startTime: string; endTime: string },
+  schedules: ClassScheduleDto[],
+): void {
+  throwIfViolated(checkClassPeriods(slot, schedules));
 }

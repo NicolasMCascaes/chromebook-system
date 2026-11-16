@@ -7,7 +7,7 @@ import * as reservationsRoute from "@/app/api/reservations/route";
 import * as accessCodeRoute from "@/app/api/admin/settings/access-code/route";
 import { createTestContext, TEST_ACCESS_CODE, type TestContext, type TestUser } from "./helpers/context";
 import { apiRequest, params } from "./helpers/http";
-import { NEXT_TUESDAY, newCancelToken, seedCarts } from "./helpers/reservations";
+import { useFiveMinutePeriods, NEXT_TUESDAY, newCancelToken, seedCarts } from "./helpers/reservations";
 
 describe("link público protegido por código", () => {
   let ctx: TestContext;
@@ -20,6 +20,7 @@ describe("link público protegido por código", () => {
 
   beforeEach(async () => {
     await ctx.reset();
+    await useFiveMinutePeriods(ctx);
     admin = await ctx.createUser("ADMIN");
     ({ cart1 } = await seedCarts(ctx));
   });

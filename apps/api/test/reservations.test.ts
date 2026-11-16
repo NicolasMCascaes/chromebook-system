@@ -16,6 +16,7 @@ import {
   seedCarts,
   SUNDAY,
   TODAY,
+  useFiveMinutePeriods,
 } from "./helpers/reservations";
 
 describe("reservas", () => {
@@ -32,6 +33,7 @@ describe("reservas", () => {
 
   beforeEach(async () => {
     await ctx.reset();
+    await useFiveMinutePeriods(ctx);
     professor = createTeacher("Ana Souza");
     otherProfessor = createTeacher("Bruno Lima");
     admin = await ctx.createUser("ADMIN");
@@ -181,7 +183,7 @@ describe("reservas", () => {
 
       await expectRule(await postReservation(professor, { cartId: cart1, startTime: "08:00", endTime: "09:00" }), "OUTSIDE_SCHOOL_HOURS");
       await expectRule(await postReservation(professor, { cartId: cart1, startTime: "19:15", endTime: "20:00" }), "SLOT_MISALIGNED");
-      expect((await postReservation(professor, { cartId: cart1, startTime: "19:30", endTime: "21:00" })).status).toBe(201);
+      expect((await postReservation(professor, { cartId: cart1, startTime: "12:00", endTime: "13:00" })).status).toBe(201);
     });
 
     it("recusa formatos inválidos de data e hora", async () => {
@@ -194,7 +196,25 @@ describe("reservas", () => {
       const response = await postReservation(professor, { cartId: cart1, className: "1º EM", startTime: "08:00", endTime: "09:00" });
       expect(response.status).toBe(422);
       expect(await response.json()).toMatchObject({ details: [{ path: "className", message: "Selecione a turma." }] });
-      expect((await postReservation(createTeacher(), { cartId: cart1, className: "5º B", startTime: "08:00", endTime: "09:00" })).status).toBe(201);
+      expect((await postReservation(createTeacher(), { cartId: cart1, className: "5º B", startTime: "08:10", endTime: "09:00" })).status).toBe(201);
+    });
+  });
+
+  describe("aulas da turma", () => {
+    it("exige que o horário comece e termine junto com as aulas da grade da turma", async () => {
+      await expectRule(await postReservation(professor, { cartId: cart1, className: "8º A", startTime: "08:00", endTime: "09:00" }), "OUTSIDE_CLASS_PERIODS");
+      await expectRule(await postReservation(professor, { cartId: cart1, className: "8º A", startTime: "09:20", endTime: "10:10" }), "OUTSIDE_CLASS_PERIODS");
+      expect((await postReservation(professor, { cartId: cart1, className: "8º A", startTime: "09:00", endTime: "09:50" })).status).toBe(201);
+      expect((await postReservation(otherProfessor, { cartId: cart2, className: "8º A", startTime: "07:20", endTime: "11:50" })).status).toBe(201);
+    });
+
+    it("recusa pedidos quando não há aulas cadastradas", async () => {
+      await ctx.client`delete from app.class_periods`;
+      await expectRule(await postReservation(professor, { cartId: cart1, className: "8º A", startTime: "09:00", endTime: "09:50" }), "NO_CLASS_PERIODS");
+    });
+
+    it("o TI pode reservar fora das aulas", async () => {
+      expect((await postReservation(admin, { cartId: cart1, className: "8º A", startTime: "08:00", endTime: "09:00" })).status).toBe(201);
     });
   });
 

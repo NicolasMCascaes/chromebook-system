@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import type { ReservationDto } from "@chromebook/shared";
 import { reservations } from "@/lib/db/schema";
 import { createTestContext, type TestContext } from "./helpers/context";
-import { createTeacher, NEXT_TUESDAY, postReservation, seedCarts, type Teacher } from "./helpers/reservations";
+import { useFiveMinutePeriods, createTeacher, NEXT_TUESDAY, postReservation, seedCarts, type Teacher } from "./helpers/reservations";
 
 const CONCURRENT_REQUESTS = 8;
 
@@ -19,6 +19,7 @@ describe("concorrência e restrição no banco", () => {
 
   beforeEach(async () => {
     await ctx.reset();
+    await useFiveMinutePeriods(ctx);
     ({ cart1, cart2 } = await seedCarts(ctx));
     teachers = Array.from({ length: CONCURRENT_REQUESTS }, (_, index) => createTeacher(`Professor ${index}`));
   });

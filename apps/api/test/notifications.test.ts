@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import * as dispatchRoute from "@/app/api/internal/notifications/dispatch/route";
 import { createTestContext, TEST_CRON_SECRET, type TestContext } from "./helpers/context";
 import { apiRequest, params } from "./helpers/http";
-import { createTeacher, postReservation, seedCarts } from "./helpers/reservations";
+import { useFiveMinutePeriods, createTeacher, postReservation, seedCarts } from "./helpers/reservations";
 
 interface OutboxRow {
   recipient: string;
@@ -23,6 +23,7 @@ describe("e-mail de nova reserva", () => {
 
   beforeEach(async () => {
     await ctx.reset();
+    await useFiveMinutePeriods(ctx);
     ({ cart1 } = await seedCarts(ctx));
     await ctx.client`update app.school_settings set notification_emails = ${["coord@escola.test", "direcao@escola.test"]}`;
   });

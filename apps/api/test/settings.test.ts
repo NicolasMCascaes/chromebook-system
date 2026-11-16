@@ -4,7 +4,7 @@ import * as settingsRoute from "@/app/api/admin/settings/route";
 import * as calendarRoute from "@/app/api/calendar/route";
 import { createTestContext, TEST_ACCESS_CODE, type TestContext, type TestUser } from "./helpers/context";
 import { apiRequest, params } from "./helpers/http";
-import { createTeacher, NEXT_TUESDAY, postReservation, seedCarts } from "./helpers/reservations";
+import { useFiveMinutePeriods, createTeacher, NEXT_TUESDAY, postReservation, seedCarts } from "./helpers/reservations";
 
 const DEFAULT_SCHEDULES = [
   {
@@ -82,6 +82,7 @@ describe("configurações da escola", () => {
   });
 
   it("lista reservas futuras que ficaram fora do novo horário sem cancelá-las", async () => {
+    await useFiveMinutePeriods(ctx);
     const late = (await (await postReservation(createTeacher(), { cartId: cart1, startTime: "14:00", endTime: "15:00" })).json()) as ReservationDto;
     const misaligned = (await (await postReservation(createTeacher(), { cartId: cart1, startTime: "08:05", endTime: "09:00" })).json()) as ReservationDto;
     await postReservation(createTeacher(), { cartId: cart1, startTime: "10:00", endTime: "11:00" });

@@ -70,3 +70,13 @@ export function cancelReservationRequest(actor: Teacher | TestUser, id: string, 
     params({ id }),
   );
 }
+
+export async function useFiveMinutePeriods(ctx: TestContext): Promise<void> {
+  const [target] = await ctx.client<{ id: string }[]>`select id from app.class_schedules where '7º ano' = any(class_names)`;
+  await ctx.client`delete from app.class_periods where schedule_id = ${target!.id}`;
+  await ctx.client`
+    insert into app.class_periods (schedule_id, name, start_time, end_time)
+    select ${target!.id}, 'Faixa ' || to_char(slot, 'HH24:MI'), slot::time, (slot + interval '5 minutes')::time
+    from generate_series(timestamp '2000-01-01 07:00', timestamp '2000-01-01 17:55', interval '5 minutes') as slot
+  `;
+}

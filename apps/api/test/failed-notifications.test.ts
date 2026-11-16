@@ -4,7 +4,7 @@ import * as failedRoute from "@/app/api/admin/notifications/failed/route";
 import * as retryRoute from "@/app/api/admin/notifications/[id]/retry/route";
 import { createTestContext, type TestContext, type TestUser } from "./helpers/context";
 import { apiRequest, params } from "./helpers/http";
-import { cancelReservationRequest, createTeacher, NEXT_TUESDAY, postReservation, seedCarts } from "./helpers/reservations";
+import { useFiveMinutePeriods, cancelReservationRequest, createTeacher, NEXT_TUESDAY, postReservation, seedCarts } from "./helpers/reservations";
 
 describe("e-mails que não foram entregues", () => {
   let ctx: TestContext;
@@ -17,6 +17,7 @@ describe("e-mails que não foram entregues", () => {
 
   beforeEach(async () => {
     await ctx.reset();
+    await useFiveMinutePeriods(ctx);
     admin = await ctx.createUser("ADMIN");
     ({ cart1 } = await seedCarts(ctx));
     await ctx.client`update app.school_settings set notification_emails = ${["coord@escola.test", "ti@escola.test"]}`;

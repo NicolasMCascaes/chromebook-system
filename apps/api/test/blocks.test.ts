@@ -4,7 +4,7 @@ import * as blocksRoute from "@/app/api/admin/blocks/route";
 import * as blockRoute from "@/app/api/admin/blocks/[id]/route";
 import { createTestContext, type TestContext, type TestUser } from "./helpers/context";
 import { apiRequest, params } from "./helpers/http";
-import { createTeacher, NEXT_TUESDAY, postReservation, seedCarts, TODAY } from "./helpers/reservations";
+import { useFiveMinutePeriods, createTeacher, NEXT_TUESDAY, postReservation, seedCarts, TODAY } from "./helpers/reservations";
 
 describe("bloqueios e feriados", () => {
   let ctx: TestContext;
@@ -18,6 +18,7 @@ describe("bloqueios e feriados", () => {
 
   beforeEach(async () => {
     await ctx.reset();
+    await useFiveMinutePeriods(ctx);
     admin = await ctx.createUser("ADMIN");
     ({ cart1, cart2 } = await seedCarts(ctx));
   });

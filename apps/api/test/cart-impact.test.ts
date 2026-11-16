@@ -3,7 +3,7 @@ import type { AdminReservationDto, ReservationDto } from "@chromebook/shared";
 import * as upcomingRoute from "@/app/api/admin/carts/[id]/upcoming-reservations/route";
 import { createTestContext, type TestContext, type TestUser } from "./helpers/context";
 import { apiRequest, params } from "./helpers/http";
-import { cancelReservationRequest, createTeacher, NEXT_TUESDAY, postReservation, seedCarts, TODAY } from "./helpers/reservations";
+import { useFiveMinutePeriods, cancelReservationRequest, createTeacher, NEXT_TUESDAY, postReservation, seedCarts, TODAY } from "./helpers/reservations";
 
 describe("reservas futuras de um carrinho", () => {
   let ctx: TestContext;
@@ -17,6 +17,7 @@ describe("reservas futuras de um carrinho", () => {
 
   beforeEach(async () => {
     await ctx.reset();
+    await useFiveMinutePeriods(ctx);
     admin = await ctx.createUser("ADMIN");
     ({ cart1, cart2 } = await seedCarts(ctx));
   });

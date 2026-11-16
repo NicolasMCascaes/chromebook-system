@@ -2,9 +2,11 @@ import { lazy, Suspense, useMemo, useState, type FormEvent } from "react";
 import {
   isValidIsoDate,
   reservationInputSchema,
+  scheduleForClass,
   schoolNow,
   type CalendarDto,
   type ClassPeriodDto,
+  type ClassScheduleDto,
   type SchoolNow,
   type ReservationDto,
   type ReservationInput,
@@ -19,7 +21,7 @@ import { formatDateLong, formatTimeRange, plural } from "../../lib/format";
 import { zodFieldErrors, type FieldErrors } from "../../lib/form-errors";
 import { cartSituation, validateReservationForm } from "./reservation-validation";
 import { lastTeacherName, newCancelToken, rememberReservation, rememberTeacherName } from "../../lib/my-reservations";
-import { describeWithSchedules, findMatchingSchedule, periodRangeTimes } from "./schedule-model";
+import { describeWithSchedules, matchPeriods, periodRangeTimes, type PeriodSelection } from "./schedule-model";
 import { cartStyle } from "./cart-style";
 
 const DatePickerField = lazy(() => import("./DatePickerField").then((module) => ({ default: module.DatePickerField })));
@@ -31,20 +33,14 @@ export interface ReservationPrefill {
   endTime?: string;
 }
 
-type TimeMode = "period" | "custom";
-
 type FieldName = "teacherName" | "className" | "date" | "startTime" | "endTime" | "cartId" | "notes";
 
 interface FormValues {
   teacherName: string;
   className: string;
   date: string;
-  mode: TimeMode;
-  scheduleId: string;
   fromPeriodId: string;
   toPeriodId: string;
-  startTime: string;
-  endTime: string;
   cartId: string;
   notes: string;
 }
@@ -65,24 +61,29 @@ function hasStarted(period: ClassPeriodDto, date: string, now: SchoolNow): boole
   return date < now.date || (date === now.date && period.startTime < now.time);
 }
 
-function initialValues(prefill: ReservationPrefill, schedule: ReservationDialogProps["schedule"], now: SchoolNow): FormValues {
-  const schedules = schedule.schedules.filter((entry) => entry.periods.length > 0);
-  const matched =
-    prefill.startTime && prefill.endTime ? findMatchingSchedule(schedules, prefill.startTime, prefill.endTime) : null;
-  const usePeriods = schedules.length > 0 && (matched !== null || !prefill.startTime);
-  const periods = (matched?.schedule ?? schedules[0])?.periods ?? [];
-  const date = prefill.date ?? schedule.today;
+function periodsForClass(schedules: ClassScheduleDto[], className: string): ClassPeriodDto[] {
+  return className ? (scheduleForClass(schedules, className)?.periods ?? []) : [];
+}
+
+function initialSelection(
+  periods: ClassPeriodDto[],
+  date: string,
+  now: SchoolNow,
+  prefill: ReservationPrefill,
+): PeriodSelection {
+  const matched = prefill.startTime && prefill.endTime ? matchPeriods(periods, prefill.startTime, prefill.endTime) : null;
+  if (matched) return matched;
   const firstPeriod = periods.find((period) => !hasStarted(period, date, now)) ?? periods[0];
+  return { fromPeriodId: firstPeriod?.id ?? "", toPeriodId: firstPeriod?.id ?? "" };
+}
+
+function initialValues(prefill: ReservationPrefill, schedule: ReservationDialogProps["schedule"]): FormValues {
   return {
     teacherName: lastTeacherName(),
     className: "",
-    date,
-    mode: usePeriods ? "period" : "custom",
-    scheduleId: matched?.schedule.id ?? schedules[0]?.id ?? "",
-    fromPeriodId: matched?.selection.fromPeriodId ?? firstPeriod?.id ?? "",
-    toPeriodId: matched?.selection.toPeriodId ?? firstPeriod?.id ?? "",
-    startTime: prefill.startTime ?? schedule.hours.openingTime,
-    endTime: prefill.endTime ?? "",
+    date: prefill.date ?? schedule.today,
+    fromPeriodId: "",
+    toPeriodId: "",
     cartId: prefill.cartId ?? (schedule.carts.length === 1 ? schedule.carts[0]!.id : ""),
     notes: "",
   };
@@ -94,7 +95,7 @@ function ReservationForm({
   onClose,
 }: Omit<ReservationDialogProps, "open">) {
   const now = useMemo(() => schoolNow(new Date()), []);
-  const [values, setValues] = useState<FormValues>(() => initialValues(prefill, schedule, now));
+  const [values, setValues] = useState<FormValues>(() => initialValues(prefill, schedule));
   const [serverErrors, setServerErrors] = useState<FieldErrors>({});
   const [touched, setTouched] = useState<Partial<Record<FieldName, boolean>>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -112,13 +113,7 @@ function ReservationForm({
   const touch = (field: FieldName) => setTouched((current) => ({ ...current, [field]: true }));
 
   const schedules = schedule.schedules.filter((entry) => entry.periods.length > 0);
-  const periods = schedules.find((entry) => entry.id === values.scheduleId)?.periods ?? [];
-  const classSchedule = schedules.find((entry) => entry.classNames.includes(values.className));
-
-  function selectSchedule(scheduleId: string) {
-    const firstPeriod = schedules.find((entry) => entry.id === scheduleId)?.periods[0]?.id ?? "";
-    setValues((current) => ({ ...current, scheduleId, fromPeriodId: firstPeriod, toPeriodId: firstPeriod }));
-  }
+  const periods = periodsForClass(schedules, values.className);
 
   function selectFromPeriod(fromPeriodId: string) {
     const nextFromIndex = periods.findIndex((period) => period.id === fromPeriodId);
@@ -128,17 +123,19 @@ function ReservationForm({
   }
 
   function selectClass(className: string) {
-    const target = schedules.find((entry) => entry.classNames.includes(className));
-    set("className", className);
-    if (target && target.id !== values.scheduleId) selectSchedule(target.id);
+    const nextPeriods = periodsForClass(schedules, className);
+    const keepsSelection = nextPeriods.some((period) => period.id === values.fromPeriodId);
+    const selection = keepsSelection
+      ? { fromPeriodId: values.fromPeriodId, toPeriodId: values.toPeriodId }
+      : initialSelection(nextPeriods, values.date, now, prefill);
+    setServerErrors({});
+    setValues((current) => ({ ...current, className, ...selection }));
   }
 
-  const selectedTimes = useMemo(() => {
-    if (values.mode === "period") {
-      return periodRangeTimes(periods, { fromPeriodId: values.fromPeriodId, toPeriodId: values.toPeriodId });
-    }
-    return values.startTime && values.endTime ? { startTime: values.startTime, endTime: values.endTime } : null;
-  }, [values.mode, values.fromPeriodId, values.toPeriodId, values.startTime, values.endTime, periods]);
+  const selectedTimes = useMemo(
+    () => periodRangeTimes(periods, { fromPeriodId: values.fromPeriodId, toPeriodId: values.toPeriodId }),
+    [values.fromPeriodId, values.toPeriodId, periods],
+  );
 
   const fromIndex = periods.findIndex((period) => period.id === values.fromPeriodId);
   const cartIds = useMemo(() => schedule.carts.map((cart) => cart.id), [schedule.carts]);
@@ -159,16 +156,16 @@ function ReservationForm({
           now,
           hours: schedule.hours,
           availability: dayAvailability,
-          invalidPeriodRange: values.mode === "period" && !selectedTimes,
+          invalidPeriodRange: periods.length > 0 && values.fromPeriodId !== "" && !selectedTimes,
         },
       ),
-    [values, selectedTimes, now, schedule.hours, dayAvailability],
+    [values, selectedTimes, periods.length, now, schedule.hours, dayAvailability],
   );
 
   function isVisible(field: FieldName): boolean {
+    if (field === "startTime" || field === "endTime") return periods.length > 0;
     if (submitted || touched[field]) return true;
     if (field === "date") return true;
-    if (field === "startTime" || field === "endTime") return selectedTimes !== null || values.mode === "period";
     if (field === "cartId") return values.cartId !== "";
     return false;
   }
@@ -349,46 +346,18 @@ function ReservationForm({
 
       <fieldset className="field-group">
         <legend>Horário</legend>
-        {schedules.length > 0 && (
-          <div className="segmented" role="radiogroup" aria-label="Forma de escolher o horário">
-            <button
-              type="button"
-              role="radio"
-              aria-checked={values.mode === "period"}
-              className={values.mode === "period" ? "is-active" : undefined}
-              onClick={() => set("mode", "period")}
-            >
-              Por aula
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={values.mode === "custom"}
-              className={values.mode === "custom" ? "is-active" : undefined}
-              onClick={() => set("mode", "custom")}
-            >
-              Outro horário
-            </button>
-          </div>
-        )}
-
-        {values.mode === "period" ? (
+        {schedules.length === 0 ? (
+          <StatusMessage kind="empty">As aulas ainda não foram cadastradas. Fale com o TI para reservar.</StatusMessage>
+        ) : (
           <div className="form-grid">
-            {!classSchedule && schedules.length > 1 && (
-              <label className="field full">
-                <span>Horário da turma</span>
-                <select value={values.scheduleId} onChange={(event) => selectSchedule(event.target.value)}>
-                  {schedules.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
             <label className="field">
               <span>Da aula</span>
-              <select value={values.fromPeriodId} onChange={(event) => selectFromPeriod(event.target.value)}>
+              <select
+                value={values.fromPeriodId}
+                disabled={periods.length === 0}
+                onChange={(event) => selectFromPeriod(event.target.value)}
+              >
+                {periods.length === 0 && <option value="">Selecione a turma primeiro</option>}
                 {periods.map((period) => {
                   const started = hasStarted(period, values.date, now);
                   return (
@@ -398,10 +367,16 @@ function ReservationForm({
                   );
                 })}
               </select>
+              <FieldError message={errorFor("startTime")} />
             </label>
             <label className="field">
               <span>Até a aula</span>
-              <select value={values.toPeriodId} onChange={(event) => set("toPeriodId", event.target.value)}>
+              <select
+                value={values.toPeriodId}
+                disabled={periods.length === 0}
+                onChange={(event) => set("toPeriodId", event.target.value)}
+              >
+                {periods.length === 0 && <option value="">Selecione a turma primeiro</option>}
                 {periods.map((period, index) => (
                   <option key={period.id} value={period.id} disabled={index < fromIndex}>
                     {period.name} (até {period.endTime})
@@ -411,40 +386,8 @@ function ReservationForm({
               <FieldError message={errorFor("endTime")} />
             </label>
           </div>
-        ) : (
-          <div className="form-grid">
-            <label className="field">
-              <span>Início</span>
-              <input
-                type="time"
-                step={schedule.hours.slotMinutes * 60}
-                min={schedule.hours.openingTime}
-                max={schedule.hours.closingTime}
-                value={values.startTime}
-                onChange={(event) => set("startTime", event.target.value)}
-                onBlur={() => touch("startTime")}
-              />
-              <FieldError message={errorFor("startTime")} />
-            </label>
-            <label className="field">
-              <span>Término</span>
-              <input
-                type="time"
-                step={schedule.hours.slotMinutes * 60}
-                min={schedule.hours.openingTime}
-                max={schedule.hours.closingTime}
-                value={values.endTime}
-                onChange={(event) => set("endTime", event.target.value)}
-                onBlur={() => touch("endTime")}
-              />
-              <FieldError message={errorFor("endTime")} />
-            </label>
-          </div>
         )}
         {selectedTimes && <p className="muted">Horário selecionado: {formatTimeRange(selectedTimes.startTime, selectedTimes.endTime)}</p>}
-        <p className="muted small-text">
-          Funcionamento: {formatTimeRange(schedule.hours.openingTime, schedule.hours.closingTime)}
-        </p>
       </fieldset>
 
       <fieldset className="field-group">

@@ -6,7 +6,7 @@ import { calendarBlocks, carts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createTestContext, type TestContext, type TestUser } from "./helpers/context";
 import { apiRequest, params } from "./helpers/http";
-import { cancelReservationRequest, createTeacher, NEXT_TUESDAY, postReservation, seedCarts } from "./helpers/reservations";
+import { useFiveMinutePeriods, cancelReservationRequest, createTeacher, NEXT_TUESDAY, postReservation, seedCarts } from "./helpers/reservations";
 
 describe("aprovação de reservas", () => {
   let ctx: TestContext;
@@ -19,6 +19,7 @@ describe("aprovação de reservas", () => {
 
   beforeEach(async () => {
     await ctx.reset();
+    await useFiveMinutePeriods(ctx);
     admin = await ctx.createUser("ADMIN");
     ({ cart1 } = await seedCarts(ctx));
     await ctx.client`update app.school_settings set notification_emails = ${["ti@escola.test"]}`;

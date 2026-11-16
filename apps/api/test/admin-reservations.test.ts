@@ -14,6 +14,7 @@ import {
   seedCarts,
   TODAY,
   type Teacher,
+  useFiveMinutePeriods,
 } from "./helpers/reservations";
 
 describe("reservas na área do TI", () => {
@@ -29,6 +30,7 @@ describe("reservas na área do TI", () => {
 
   beforeEach(async () => {
     await ctx.reset();
+    await useFiveMinutePeriods(ctx);
     admin = await ctx.createUser("ADMIN");
     professor = createTeacher("Ana Souza");
     ({ cart1, cart2 } = await seedCarts(ctx));
@@ -66,7 +68,7 @@ describe("reservas na área do TI", () => {
     });
 
     it("filtra por situação, carrinho e busca por professor ou turma", async () => {
-      await create(professor, { cartId: cart1, startTime: "08:00", endTime: "09:00", className: "8º B" });
+      await create(professor, { cartId: cart1, startTime: "07:20", endTime: "08:10", className: "8º B" });
       await create(createTeacher("Bruno Lima"), { cartId: cart2, startTime: "08:00", endTime: "09:00" });
       const cancelled = await create(professor, { cartId: cart2, startTime: "10:00", endTime: "11:00" });
       await cancelReservationRequest(admin, cancelled.id);
