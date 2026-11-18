@@ -41,6 +41,11 @@ export function FailedNotifications() {
                   <div className="muted small-text">
                     {item.reservation.cartName} · {item.reservation.teacherName} · {item.reservation.className}
                   </div>
+                  {item.slotCount > 1 && (
+                    <div className="muted small-text">
+                      E-mail único de um pedido com {item.slotCount} horários; mostra o primeiro.
+                    </div>
+                  )}
                 </td>
                 <td>{item.recipient}</td>
                 <td>{RESERVATION_STATUS_LABELS[item.reservation.status]}</td>
