@@ -71,7 +71,7 @@ describe("reserva de vários horários em um envio", () => {
     expect(body.reservations[0]).toMatchObject({ teacherName: "Ana Souza", status: "PENDING", cartId: cart1, canCancel: true });
   });
 
-  it("cria três reservas separadas com o nome informado uma vez e um e-mail por reserva", async () => {
+  it("cria três reservas separadas com o nome informado uma vez e um único e-mail para o envio", async () => {
     await ctx.client`update app.school_settings set notification_emails = ${["ti@escola.test"]}`;
     const slots = [
       slot({ cartId: cart1, startTime: "08:00", endTime: "09:00", notes: "Pesquisa" }),
@@ -90,7 +90,9 @@ describe("reserva de vários horários em um envio", () => {
     ]);
     expect(new Set(created.map((entry) => entry.id)).size).toBe(3);
     const outbox = await ctx.db.select().from(notificationOutbox);
-    expect(outbox.map((row) => row.reservationId).sort()).toEqual(created.map((entry) => entry.id).sort());
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]!.reservationId).toBe(created[0]!.id);
+    expect(outbox[0]!.payload.slots?.map((entry) => entry.reservationId)).toEqual(created.map((entry) => entry.id));
   });
 
   it("cada horário pode ser cancelado sozinho com o código do próprio horário", async () => {

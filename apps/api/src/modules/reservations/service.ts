@@ -17,6 +17,7 @@ import type { AppContainer } from "@/lib/container";
 import type { AuthUser } from "@/lib/auth/authenticate";
 import { AppError } from "@/lib/http/errors";
 import { isPgError, isRetryableTransactionError, PG_EXCLUSION_VIOLATION } from "@/lib/db/errors";
+import type { NotificationSlotPayload } from "@/lib/db/schema";
 import { getNotificationEmails, getSchoolHours, listClassSchedules } from "@/modules/settings/repository";
 import { enqueueReservationNotification } from "@/modules/notifications/repository";
 import { findBlockingEntry } from "@/modules/blocks/repository";
@@ -295,6 +296,7 @@ export async function createReservationBatch(
       const schedules = approvedByCreator ? [] : await listClassSchedules(tx);
       const recipients = approvedByCreator ? [] : await getNotificationEmails(tx);
       const insertedIds: string[] = [];
+      const notificationSlots: NotificationSlotPayload[] = [];
 
       for (const [index, slot] of input.slots.entries()) {
         const hoursViolation = checkSchoolHours(slot, hours);
@@ -350,8 +352,8 @@ export async function createReservationBatch(
         insertedIds.push(insertedId);
 
         if (approvalToken) {
-          await enqueueReservationNotification(tx, insertedId, recipients, {
-            teacherName: input.teacherName,
+          notificationSlots.push({
+            reservationId: insertedId,
             className: slot.className,
             cartName: cart.name,
             date: slot.date,
@@ -361,6 +363,16 @@ export async function createReservationBatch(
             approvalToken,
           });
         }
+      }
+
+      const [firstSlot] = notificationSlots;
+      if (firstSlot) {
+        const { reservationId, ...firstSlotFields } = firstSlot;
+        await enqueueReservationNotification(tx, reservationId, recipients, {
+          teacherName: input.teacherName,
+          ...firstSlotFields,
+          ...(notificationSlots.length > 1 ? { slots: notificationSlots } : {}),
+        });
       }
       return insertedIds;
     });

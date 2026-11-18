@@ -19,6 +19,18 @@ export interface ReservationNotificationPayload {
   endTime: string;
   notes: string | null;
   approvalToken?: string;
+  slots?: NotificationSlotPayload[];
+}
+
+export interface NotificationSlotPayload {
+  reservationId: string;
+  className: string;
+  cartName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  notes: string | null;
+  approvalToken?: string;
 }
 
 export const app = pgSchema("app");

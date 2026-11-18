@@ -1,7 +1,7 @@
 import { schoolNow, type FailedNotificationDto } from "@chromebook/shared";
 import type { AppContainer } from "@/lib/container";
 import { AppError } from "@/lib/http/errors";
-import type { NotificationRow } from "@/lib/db/schema";
+import type { NotificationRow, NotificationSlotPayload } from "@/lib/db/schema";
 import type { EmailMessage } from "@/lib/email/sender";
 import {
   claimDueNotifications,
@@ -45,8 +45,41 @@ export function approvalLink(appPublicUrl: string, reservationId: string, approv
   return url.toString();
 }
 
+function buildBatchRequestEmail(notification: NotificationRow, slots: NotificationSlotPayload[], appPublicUrl?: string): EmailMessage {
+  const lines = [
+    `Um professor pediu carrinhos de Chromebooks para ${slots.length} horários no mesmo envio. Cada horário aguarda a sua aprovação separadamente.`,
+    "",
+    `Professor: ${notification.payload.teacherName}`,
+  ];
+  slots.forEach((slot, index) => {
+    lines.push(
+      "",
+      `Horário ${index + 1}`,
+      `Turma: ${slot.className}`,
+      `Carrinho: ${slot.cartName}`,
+      `Data: ${formatDate(slot.date)}`,
+      `Horário: ${slot.startTime} às ${slot.endTime}`,
+    );
+    if (slot.notes) lines.push(`Observação: ${slot.notes}`);
+    if (appPublicUrl && slot.approvalToken) {
+      lines.push(`Para aprovar ou recusar: ${approvalLink(appPublicUrl, slot.reservationId, slot.approvalToken)}`);
+    }
+  });
+  if (!appPublicUrl || slots.some((slot) => !slot.approvalToken)) {
+    lines.push("", "Para aprovar ou recusar, acesse a área do TI em Reservas.");
+  }
+  return {
+    to: notification.recipient,
+    subject: `Novo pedido de reserva: ${slots.length} horários`,
+    text: lines.join("\n"),
+  };
+}
+
 export function buildReservationEmail(notification: NotificationRow, appPublicUrl?: string): EmailMessage {
   const payload = notification.payload;
+  if (notification.type === "RESERVATION_REQUESTED" && payload.slots && payload.slots.length > 1) {
+    return buildBatchRequestEmail(notification, payload.slots, appPublicUrl);
+  }
   const isRequest = notification.type === "RESERVATION_REQUESTED";
   const lines = [
     isRequest ? "Um professor pediu um carrinho de Chromebooks. O pedido aguarda a sua aprovação." : "Uma nova reserva de carrinho foi confirmada.",
@@ -116,7 +149,8 @@ export async function listUpcomingFailedNotifications(container: AppContainer): 
     attempts: row.attempts,
     lastError: row.lastError,
     failedAt: row.updatedAt.toISOString(),
-    canRetry: row.reservationStatus === "PENDING",
+    canRetry: row.retryable,
+    slotCount: row.payload.slots?.length ?? 1,
     reservation: {
       id: row.reservationId,
       teacherName: row.payload.teacherName,

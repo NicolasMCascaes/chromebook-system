@@ -164,6 +164,7 @@ export interface FailedNotificationDto {
   lastError: string | null;
   failedAt: string;
   canRetry: boolean;
+  slotCount: number;
   reservation: {
     id: string;
     teacherName: string;
