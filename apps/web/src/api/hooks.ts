@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   AdminReservationDto,
   AvailabilityDto,
@@ -15,6 +15,8 @@ import type {
   ChromebookUpdate,
   FailedNotificationDto,
   MeDto,
+  ReservationBatchDto,
+  ReservationBatchInput,
   ReservationDto,
   ReservationDecisionInput,
   ReservationInput,
@@ -89,6 +91,17 @@ export function useAvailability(date: string | null) {
   });
 }
 
+export function useAvailabilities(dates: (string | null)[]): (AvailabilityDto | undefined)[] {
+  return useQueries({
+    queries: dates.map((date) => ({
+      queryKey: queryKeys.availability(date ?? ""),
+      queryFn: () => apiFetch<AvailabilityDto>(`/api/availability?date=${date}`),
+      enabled: date !== null,
+    })),
+    combine: (results) => results.map((result, index) => (result.data?.date === dates[index] ? result.data : undefined)),
+  });
+}
+
 export function useReservation(id: string | null, cancelToken: string | undefined) {
   return useQuery({
     queryKey: queryKeys.reservation(id ?? "", Boolean(cancelToken)),
@@ -111,6 +124,20 @@ export function useCreateReservation() {
     meta: { toastErrors: false },
     mutationFn: ({ input, idempotencyKey }: { input: ReservationInput; idempotencyKey: string }) =>
       apiFetch<ReservationDto>("/api/reservations", {
+        method: "POST",
+        body: input,
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    onSettled: invalidateSchedule,
+  });
+}
+
+export function useCreateReservationBatch() {
+  const invalidateSchedule = useInvalidateSchedule();
+  return useMutation({
+    meta: { toastErrors: false },
+    mutationFn: ({ input, idempotencyKey }: { input: ReservationBatchInput; idempotencyKey: string }) =>
+      apiFetch<ReservationBatchDto>("/api/reservations/batch", {
         method: "POST",
         body: input,
         headers: { "Idempotency-Key": idempotencyKey },

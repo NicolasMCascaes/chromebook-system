@@ -681,3 +681,41 @@
   border-radius: 50%;
   background: var(--color-warning-text);
 }
+
+.reservation-slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.reservation-slot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space);
+}
+
+.reservation-slot-header h3,
+.reservation-slot-summary h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.reservation-slot-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+.reservation-slot-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reservation-add-slot {
+  align-self: flex-start;
+}
