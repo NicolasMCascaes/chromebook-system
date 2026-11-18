@@ -175,3 +175,7 @@ export interface FailedNotificationDto {
     status: ReservationStatus;
   };
 }
+
+export interface ReservationBatchDto {
+  reservations: ReservationDto[];
+}

@@ -1,0 +1,32 @@
+import { z } from "zod";
+import { reservationBatchInputSchema, type ReservationBatchDto } from "@chromebook/shared";
+import { getContainer } from "@/lib/container";
+import { authorizePublicAccess } from "@/lib/auth/authenticate";
+import { AppError } from "@/lib/http/errors";
+import { json, readJson } from "@/lib/http/responses";
+import { route } from "@/lib/http/route";
+import { createReservationBatch } from "@/modules/reservations/service";
+import { scheduleNotificationDispatch } from "@/modules/notifications/service";
+
+export const dynamic = "force-dynamic";
+
+const idempotencyKeySchema = z.uuid();
+
+function readIdempotencyKey(request: Request): string {
+  const parsed = idempotencyKeySchema.safeParse(request.headers.get("idempotency-key"));
+  if (!parsed.success) {
+    throw new AppError(400, "IDEMPOTENCY_KEY_REQUIRED", "Cabeçalho Idempotency-Key ausente ou inválido.");
+  }
+  return parsed.data;
+}
+
+export const POST = route(async (request) => {
+  const container = getContainer();
+  const admin = await authorizePublicAccess(request, container);
+  const idempotencyKey = readIdempotencyKey(request);
+  const input = await readJson(request, reservationBatchInputSchema);
+  const { reservations, replayed } = await createReservationBatch(container, admin, input, idempotencyKey);
+  if (!replayed) scheduleNotificationDispatch(container);
+  const body: ReservationBatchDto = { reservations };
+  return json(body, replayed ? 200 : 201);
+});

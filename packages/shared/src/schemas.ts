@@ -8,11 +8,13 @@ import {
   MAX_CLASS_PERIODS,
   MAX_CLASS_SCHEDULES,
   MAX_NOTIFICATION_EMAILS,
+  MAX_RESERVATION_SLOTS,
   RESERVATION_STATUSES,
   SLOT_MINUTES_OPTIONS,
   USER_ROLES,
 } from "./enums";
 import { daysBetween, isValidIsoDate, TIME_PATTERN, timeToMinutes } from "./time";
+import { findOverlappingSlots, SLOT_OVERLAP_MESSAGE } from "./reservation-rules";
 
 const requiredText = (label: string, max: number) =>
   z
@@ -155,6 +157,36 @@ export const reservationInputSchema = z
   });
 export type ReservationInput = z.input<typeof reservationInputSchema>;
 
+export const reservationSlotSchema = z
+  .object({
+    cartId: z.uuid("Selecione um carrinho."),
+    className: schoolClass,
+    date: isoDate,
+    startTime: clockTime("Horário de início"),
+    endTime: clockTime("Horário de término"),
+    notes: optionalText("Observação", 500).optional().default(null),
+    cancelToken,
+  })
+  .refine((value) => timeToMinutes(value.endTime) > timeToMinutes(value.startTime), {
+    message: "O horário de término deve ser posterior ao de início.",
+    path: ["endTime"],
+  });
+export type ReservationSlotInput = z.input<typeof reservationSlotSchema>;
+
+export const reservationBatchInputSchema = z
+  .object({
+    teacherName: requiredText("Nome do professor", 100),
+    slots: z
+      .array(reservationSlotSchema, { error: "Informe ao menos um horário." })
+      .min(1, "Informe ao menos um horário.")
+      .max(MAX_RESERVATION_SLOTS, `Envie no máximo ${MAX_RESERVATION_SLOTS} horários por pedido.`),
+  })
+  .superRefine((value, context) => {
+    for (const index of findOverlappingSlots(value.slots)) {
+      context.addIssue({ code: "custom", message: SLOT_OVERLAP_MESSAGE, path: ["slots", index, "cartId"] });
+    }
+  });
+export type ReservationBatchInput = z.input<typeof reservationBatchInputSchema>;
 export const reservationCancelSchema = z.object({
   reason: optionalText("Motivo", 300).optional().default(null),
   cancelToken: cancelToken.optional(),

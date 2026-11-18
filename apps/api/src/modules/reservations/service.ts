@@ -1,6 +1,18 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { z } from "zod";
-import { CALENDAR_BLOCK_KIND_LABELS, isActiveReservationStatus, schoolNow, type ReservationDto, type reservationInputSchema } from "@chromebook/shared";
+import {
+  CALENDAR_BLOCK_KIND_LABELS,
+  checkClassPeriods,
+  checkReservationSlot,
+  checkSchoolHours,
+  findOverlappingSlots,
+  isActiveReservationStatus,
+  schoolNow,
+  SLOT_OVERLAP_MESSAGE,
+  type ReservationDto,
+  type reservationBatchInputSchema,
+  type reservationInputSchema,
+} from "@chromebook/shared";
 import type { AppContainer } from "@/lib/container";
 import type { AuthUser } from "@/lib/auth/authenticate";
 import { AppError } from "@/lib/http/errors";
@@ -182,6 +194,205 @@ export async function createReservation(
 
   const created = await findReservationView(db, insertedId);
   return { reservation: toReservationDto(created!, "owner", now), replayed: false };
+}
+
+export type ReservationBatchInput = z.output<typeof reservationBatchInputSchema>;
+
+export interface CreateReservationBatchResult {
+  reservations: ReservationDto[];
+  replayed: boolean;
+}
+
+class SlotConflictError extends Error {
+  constructor(readonly index: number) {
+    super("Reservation slot conflict");
+  }
+}
+
+class ConcurrentBatchError extends Error {}
+
+function slotLabel(index: number): string {
+  return `Horário ${index + 1}`;
+}
+
+function slotViolation(index: number, violation: { code: string; message: string; field: string }): AppError {
+  return new AppError(422, violation.code, `${slotLabel(index)}: ${violation.message}`, [
+    { path: `slots.${index}.${violation.field}`, message: violation.message },
+  ]);
+}
+
+export function slotIdempotencyKey(batchKey: string, index: number): string {
+  const hex = sha256(`batch:${batchKey}:${index}`);
+  const variant = ((parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+function batchSlotHashes(input: ReservationBatchInput): string[] {
+  const batchHash = sha256(
+    JSON.stringify([
+      input.teacherName,
+      input.slots.map((slot) => [slot.cartId, slot.className, slot.date, slot.startTime, slot.endTime, slot.notes, slot.cancelToken]),
+    ]),
+  );
+  return input.slots.map((_, index) => sha256(`${batchHash}:${index}`));
+}
+
+function idempotencyKeyReused(): AppError {
+  return new AppError(
+    422,
+    "IDEMPOTENCY_KEY_REUSED",
+    "Esta solicitação já foi usada com dados diferentes. Recarregue a página e tente novamente.",
+  );
+}
+
+async function findBatchReplay(
+  db: AppContainer["db"],
+  idempotencyKey: string,
+  hashes: string[],
+  now: ReturnType<typeof schoolNow>,
+): Promise<ReservationDto[] | null> {
+  const views: ReservationView[] = [];
+  for (let index = 0; index < hashes.length; index++) {
+    const view = await findReservationByIdempotencyKey(db, slotIdempotencyKey(idempotencyKey, index));
+    if (!view) {
+      if (index === 0) return null;
+      throw idempotencyKeyReused();
+    }
+    replayOrReject(view, hashes[index]!);
+    views.push(view);
+  }
+  return views.map((view) => toReservationDto(view, "owner", now));
+}
+
+export async function createReservationBatch(
+  container: AppContainer,
+  createdBy: AuthUser | null,
+  input: ReservationBatchInput,
+  idempotencyKey: string,
+): Promise<CreateReservationBatchResult> {
+  const { db, clock } = container;
+  const now = schoolNow(clock.now());
+  const hashes = batchSlotHashes(input);
+
+  const previous = await findBatchReplay(db, idempotencyKey, hashes, now);
+  if (previous) return { reservations: previous, replayed: true };
+
+  input.slots.forEach((slot, index) => {
+    const violation = checkReservationSlot(slot, now);
+    if (violation) throw slotViolation(index, violation);
+  });
+  const overlapping = findOverlappingSlots(input.slots);
+  if (overlapping.length > 0) {
+    throw slotViolation(overlapping[0]!, { code: "SLOT_OVERLAP", message: SLOT_OVERLAP_MESSAGE, field: "cartId" });
+  }
+
+  const approvedByCreator = createdBy?.role === "ADMIN";
+  const approvalTokens = input.slots.map(() => (approvedByCreator ? null : randomBytes(32).toString("base64url")));
+
+  const insertWithinTransaction = () =>
+    db.transaction(async (tx) => {
+      const hours = await getSchoolHours(tx, { lockForShare: true });
+      const schedules = approvedByCreator ? [] : await listClassSchedules(tx);
+      const recipients = approvedByCreator ? [] : await getNotificationEmails(tx);
+      const insertedIds: string[] = [];
+
+      for (const [index, slot] of input.slots.entries()) {
+        const hoursViolation = checkSchoolHours(slot, hours);
+        if (hoursViolation) throw slotViolation(index, hoursViolation);
+        if (!approvedByCreator) {
+          const periodViolation = checkClassPeriods(slot, schedules);
+          if (periodViolation) throw slotViolation(index, periodViolation);
+        }
+
+        const cart = await findCartForReservation(tx, slot.cartId);
+        if (!cart || !cart.active) {
+          throw slotViolation(index, {
+            code: "CART_UNAVAILABLE",
+            message: "O carrinho selecionado não está disponível para reservas.",
+            field: "cartId",
+          });
+        }
+
+        const block = await findBlockingEntry(tx, slot.cartId, slot.date);
+        if (block) {
+          throw slotViolation(index, {
+            code: "DATE_BLOCKED",
+            message: `Esta data não está disponível para reservas (${CALENDAR_BLOCK_KIND_LABELS[block.kind]}: ${block.reason}).`,
+            field: "date",
+          });
+        }
+
+        const approvalToken = approvalTokens[index]!;
+        let insertedId: string | undefined;
+        try {
+          insertedId = await insertReservationIfNew(tx, {
+            cartId: slot.cartId,
+            userId: createdBy?.id ?? null,
+            teacherName: input.teacherName,
+            className: slot.className,
+            reservationDate: slot.date,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            notes: slot.notes,
+            idempotencyKey: slotIdempotencyKey(idempotencyKey, index),
+            requestHash: hashes[index]!,
+            cancelTokenHash: hashCancelToken(slot.cancelToken),
+            status: approvedByCreator ? "CONFIRMED" : "PENDING",
+            approvalTokenHash: approvalToken ? hashApprovalToken(approvalToken) : null,
+            decidedBy: approvedByCreator ? createdBy!.id : null,
+            decidedAt: approvedByCreator ? clock.now() : null,
+          });
+        } catch (error) {
+          if (isPgError(error, PG_EXCLUSION_VIOLATION, "reservations_no_overlap")) throw new SlotConflictError(index);
+          throw error;
+        }
+        if (!insertedId) throw new ConcurrentBatchError();
+        insertedIds.push(insertedId);
+
+        if (approvalToken) {
+          await enqueueReservationNotification(tx, insertedId, recipients, {
+            teacherName: input.teacherName,
+            className: slot.className,
+            cartName: cart.name,
+            date: slot.date,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            notes: slot.notes,
+            approvalToken,
+          });
+        }
+      }
+      return insertedIds;
+    });
+
+  let insertedIds: string[];
+  for (let attempt = 1; ; attempt++) {
+    try {
+      insertedIds = await insertWithinTransaction();
+      break;
+    } catch (error) {
+      if (isRetryableTransactionError(error) && attempt < MAX_TRANSACTION_ATTEMPTS) continue;
+      if (error instanceof SlotConflictError || error instanceof ConcurrentBatchError) {
+        const concurrent = await findBatchReplay(db, idempotencyKey, hashes, now);
+        if (concurrent) return { reservations: concurrent, replayed: true };
+        if (error instanceof ConcurrentBatchError) throw new Error("Idempotent batch insert skipped without existing reservations");
+        throw new AppError(
+          409,
+          "RESERVATION_CONFLICT",
+          `${slotLabel(error.index)}: ${RESERVATION_CONFLICT_MESSAGE} Nenhum horário do pedido foi reservado.`,
+          [{ path: `slots.${error.index}.cartId`, message: RESERVATION_CONFLICT_MESSAGE }],
+        );
+      }
+      throw error;
+    }
+  }
+
+  const created: ReservationDto[] = [];
+  for (const id of insertedIds) {
+    const view = await findReservationView(db, id);
+    created.push(toReservationDto(view!, "owner", now));
+  }
+  return { reservations: created, replayed: false };
 }
 
 export async function getReservation(

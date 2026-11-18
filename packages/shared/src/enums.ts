@@ -58,6 +58,7 @@ export const MAX_ADMIN_RANGE_DAYS = 366;
 export const MAX_CLASS_PERIODS = 15;
 export const MAX_CLASS_SCHEDULES = 5;
 export const MAX_NOTIFICATION_EMAILS = 10;
+export const MAX_RESERVATION_SLOTS = 6;
 
 export const NOTIFICATION_STATUSES = ["PENDING", "SENT", "FAILED"] as const;
 export type NotificationStatus = (typeof NOTIFICATION_STATUSES)[number];

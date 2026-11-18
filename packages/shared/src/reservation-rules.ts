@@ -78,3 +78,27 @@ export function checkClassPeriods(
   }
   return null;
 }
+
+export const SLOT_OVERLAP_MESSAGE = "Este carrinho já está em outro horário deste pedido que se sobrepõe a este.";
+
+export interface BatchSlotKey {
+  cartId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+}
+
+export function findOverlappingSlots(slots: BatchSlotKey[]): number[] {
+  const overlapping = new Set<number>();
+  slots.forEach((slot, index) => {
+    for (let previous = 0; previous < index; previous++) {
+      const other = slots[previous]!;
+      if (!slot.cartId || other.cartId !== slot.cartId || other.date !== slot.date) continue;
+      const start = timeToMinutes(slot.startTime);
+      const end = timeToMinutes(slot.endTime);
+      if (Number.isNaN(start) || Number.isNaN(end)) continue;
+      if (start < timeToMinutes(other.endTime) && timeToMinutes(other.startTime) < end) overlapping.add(index);
+    }
+  });
+  return [...overlapping].sort((a, b) => a - b);
+}
