@@ -681,3 +681,89 @@
   border-radius: 50%;
   background: var(--color-warning-text);
 }
+
+@media (max-width: 767px) {
+  .agenda-header .button,
+  .day-details-header .button,
+  .theme-toggle {
+    min-height: 44px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .mobile-day-nav .icon-button,
+  .mobile-day-nav .button {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .mobile-day-picker input {
+    min-height: 44px;
+    padding: 8px 10px;
+  }
+
+  .agenda-mobile .cart-filter.is-compact {
+    gap: 8px;
+  }
+
+  .agenda-mobile .cart-filter-item {
+    align-items: center;
+    min-height: 44px;
+    padding: 6px 14px 6px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-surface);
+  }
+
+  .agenda-mobile .cart-filter-item:has(input:checked) {
+    border-color: var(--cart-color);
+    background: color-mix(in srgb, var(--cart-color) 10%, var(--color-surface));
+  }
+
+  .agenda-mobile .cart-filter-item input {
+    margin: 0;
+    width: 20px;
+    height: 20px;
+  }
+
+  .agenda-mobile .day-reservation {
+    min-height: 48px;
+    padding: 6px 10px;
+    justify-content: center;
+    font-size: 0.875rem;
+  }
+
+  .agenda-mobile .day-free {
+    gap: 8px;
+  }
+
+  .agenda-mobile .free-slot {
+    min-height: 44px;
+    padding: 6px 14px;
+    font-size: 0.875rem;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .agenda-header .button,
+  .agenda-toolbar .button,
+  .theme-toggle {
+    min-height: 44px;
+  }
+
+  .agenda-toolbar .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .agenda-toolbar .segmented button {
+    min-height: 44px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .agenda-page .cart-filter-item {
+    align-items: center;
+    min-height: 44px;
+  }
+}
