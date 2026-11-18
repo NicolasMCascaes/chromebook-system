@@ -72,7 +72,15 @@ export function DatePickerField({ value, cartIds, onChange }: DatePickerFieldPro
   );
 
   return (
-    <div className="date-picker">
+    <div
+      className="date-picker"
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || !open) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+      }}
+    >
       <button
         type="button"
         className="date-picker-trigger"
@@ -82,9 +90,17 @@ export function DatePickerField({ value, cartIds, onChange }: DatePickerFieldPro
         <span>{formatDateLong(value)}</span>
         <span aria-hidden="true">{open ? "▲" : "▼"}</span>
       </button>
+      {open && <div className="date-picker-backdrop" aria-hidden="true" onClick={() => setOpen(false)} />}
       {open && (
-        <div className="date-picker-panel">
+        <div className="date-picker-panel" role="group" aria-label="Escolha a data">
+          <div className="date-picker-sheet-header">
+            <strong>Escolha a data</strong>
+            <button type="button" className="button link" onClick={() => setOpen(false)}>
+              Fechar
+            </button>
+          </div>
           <DayPicker
+            autoFocus
             mode="single"
             locale={ptBR}
             weekStartsOn={1}
